@@ -1,12 +1,12 @@
 /*******************************************************************************
 *
-*  (C) COPYRIGHT AUTHORS, 2015 - 2019
+*  (C) COPYRIGHT AUTHORS, 2015 - 2020
 *
 *  TITLE:       UI.H
 *
-*  VERSION:     1.82
+*  VERSION:     1.83
 *
-*  DATE:        24 Nov 2019
+*  DATE:        30 Nov 2019
 *
 *  Common header file for the user interface.
 *
@@ -40,8 +40,8 @@ typedef HWND(WINAPI *pfnHtmlHelpW)(
 
 #define PROGRAM_MAJOR_VERSION       1
 #define PROGRAM_MINOR_VERSION       8
-#define PROGRAM_REVISION_NUMBER     2
-#define PROGRAM_BUILD_NUMBER        1911
+#define PROGRAM_REVISION_NUMBER     3
+#define PROGRAM_BUILD_NUMBER        2001
 
 #ifdef _USE_OWN_DRIVER
 #define PROGRAM_NAME            L"Windows Object Explorer 64-bit (Non-public version)"
@@ -66,6 +66,11 @@ typedef HWND(WINAPI *pfnHtmlHelpW)(
 #define T_DUMPDRIVER            L"Dump Driver"
 #define T_VIEW_REFRESH          L"Refresh\tF5"
 #define T_EMPTY                 L" "
+
+#define T_DRIVER_REQUIRED       TEXT("Support from helper driver is required for this feature.\r\n\r\n\
+If you see this message it can be caused by:\r\n\
+1) Support driver is not loaded or cannot be opened due to insufficient security rights;\r\n\
+2) There is a internal error processing request to the heper driver.")
 
 #define T_RICHEDIT_LIB          TEXT("RICHED32.DLL")
 

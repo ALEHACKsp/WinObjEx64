@@ -1,12 +1,12 @@
 /*******************************************************************************
 *
-*  (C) COPYRIGHT AUTHORS, 2015 - 2019
+*  (C) COPYRIGHT AUTHORS, 2015 - 2020
 *
 *  TITLE:       EXTRAS.C
 *
-*  VERSION:     1.82
+*  VERSION:     1.83
 *
-*  DATE:        19 Nov 2019
+*  DATE:        30 Nov 2019
 *
 * THIS CODE AND INFORMATION IS PROVIDED "AS IS" WITHOUT WARRANTY OF
 * ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED
@@ -166,6 +166,9 @@ VOID extrasShowDialogById(
             if (kdConnectDriver()) {
                 extrasCreatePNDialog(ParentWindow);
             }
+            else {
+                MessageBox(ParentWindow, T_DRIVER_REQUIRED, NULL, MB_ICONINFORMATION);
+            }
         }
         break;
 
@@ -202,7 +205,12 @@ VOID extrasShowDialogById(
         break;
 
     case ID_EXTRAS_CALLBACKS:
-        extrasCreateCallbacksDialog(ParentWindow);
+        if (kdConnectDriver()) {
+            extrasCreateCallbacksDialog(ParentWindow);
+        }
+        else {
+            MessageBox(ParentWindow, T_DRIVER_REQUIRED, NULL, MB_ICONINFORMATION);
+        }
         break;
 
     case ID_EXTRAS_SOFTWARELICENSECACHE:

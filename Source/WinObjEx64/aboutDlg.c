@@ -1,12 +1,12 @@
 /*******************************************************************************
 *
-*  (C) COPYRIGHT AUTHORS, 2015 - 2019
+*  (C) COPYRIGHT AUTHORS, 2015 - 2020
 *
 *  TITLE:       ABOUTDLG.C
 *
-*  VERSION:     1.82
+*  VERSION:     1.83
 *
-*  DATE:        24 Nov 2019
+*  DATE:        30 Nov 2019
 *
 * THIS CODE AND INFORMATION IS PROVIDED "AS IS" WITHOUT WARRANTY OF
 * ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED
@@ -19,6 +19,23 @@
 #include <Richedit.h>
 
 #undef _WINE_NB_DEBUG
+
+VALUE_DESC CodeIntegrityValuesList[] = {
+    { L"CODEINTEGRITY_OPTION_ENABLED", CODEINTEGRITY_OPTION_ENABLED },
+    { L"CODEINTEGRITY_OPTION_TESTSIGN", CODEINTEGRITY_OPTION_TESTSIGN },
+    { L"CODEINTEGRITY_OPTION_UMCI_ENABLED", CODEINTEGRITY_OPTION_UMCI_ENABLED },
+    { L"CODEINTEGRITY_OPTION_UMCI_AUDITMODE_ENABLED", CODEINTEGRITY_OPTION_UMCI_AUDITMODE_ENABLED },
+    { L"CODEINTEGRITY_OPTION_UMCI_EXCLUSIONPATHS_ENABLED", CODEINTEGRITY_OPTION_UMCI_EXCLUSIONPATHS_ENABLED },
+    { L"CODEINTEGRITY_OPTION_TEST_BUILD", CODEINTEGRITY_OPTION_TEST_BUILD },
+    { L"CODEINTEGRITY_OPTION_PREPRODUCTION_BUILD", CODEINTEGRITY_OPTION_PREPRODUCTION_BUILD },
+    { L"CODEINTEGRITY_OPTION_DEBUGMODE_ENABLED", CODEINTEGRITY_OPTION_DEBUGMODE_ENABLED },
+    { L"CODEINTEGRITY_OPTION_FLIGHT_BUILD", CODEINTEGRITY_OPTION_FLIGHT_BUILD },
+    { L"CODEINTEGRITY_OPTION_FLIGHTING_ENABLED", CODEINTEGRITY_OPTION_FLIGHTING_ENABLED },
+    { L"CODEINTEGRITY_OPTION_HVCI_KMCI_ENABLED", CODEINTEGRITY_OPTION_HVCI_KMCI_ENABLED },
+    { L"CODEINTEGRITY_OPTION_HVCI_KMCI_AUDITMODE_ENABLED", CODEINTEGRITY_OPTION_HVCI_KMCI_AUDITMODE_ENABLED },
+    { L"CODEINTEGRITY_OPTION_HVCI_KMCI_STRICTMODE_ENABLED", CODEINTEGRITY_OPTION_HVCI_KMCI_STRICTMODE_ENABLED },
+    { L"CODEINTEGRITY_OPTION_HVCI_IUM_ENABLED", CODEINTEGRITY_OPTION_HVCI_IUM_ENABLED }
+};
 
 /*
 * AboutDialogInit
@@ -33,6 +50,7 @@ VOID AboutDialogInit(
 )
 {
     BOOLEAN  bSecureBoot = FALSE;
+    BOOLEAN  bHVCIEnabled = FALSE, bHVCIStrict = FALSE, bHVCIIUMEnabled = FALSE;
     ULONG    returnLength;
     NTSTATUS status;
     HANDLE   hImage;
@@ -186,6 +204,18 @@ VOID AboutDialogInit(
                     _strcat(szBuffer, TEXT(" SecureBoot"));
                 }
                 g_kdctx.IsSecureBoot = bSecureBoot;
+
+                if (bSecureBoot) {
+                    if (supQueryHVCIState(&bHVCIEnabled, &bHVCIStrict, &bHVCIIUMEnabled)) {
+                        if (bHVCIEnabled) {
+                            _strcat(szBuffer, TEXT(", HVCI"));
+                            if (bHVCIStrict)
+                                _strcat(szBuffer, TEXT(" (strict)"));
+                            if (bHVCIIUMEnabled)
+                                _strcat(szBuffer, TEXT(", IUM"));
+                        }
+                    }
+                }
             }
         }
         else {
@@ -326,6 +356,8 @@ VOID AboutDialogCollectGlobals(
 )
 {
     BOOLEAN bCustomSignersAllowed;
+
+    ULONG Index, Value, SaveValue;
 
     WCHAR szBuffer[MAX_PATH * 4];
     WCHAR szTemp[MAX_PATH];
@@ -518,11 +550,32 @@ VOID AboutDialogCollectGlobals(
         sizeof(CodeIntegrity),
         &Dummy)))
     {
-        AddParameterValueUlong(hwndOutput, TEXT("CI Options Value"), CodeIntegrity.CodeIntegrityOptions);
+        AddParameterValue32Hex(hwndOutput, TEXT("CI Options Value"), CodeIntegrity.CodeIntegrityOptions);
 
         if (CodeIntegrity.CodeIntegrityOptions) {
-            if (CodeIntegrity.CodeIntegrityOptions & CODEINTEGRITY_OPTION_ENABLED)
-                AddParameterValue(hwndOutput, TEXT("CI Options"), TEXT("CODEINTEGRITY_OPTION_ENABLED"));
+
+            for (Index = 0; Index < RTL_NUMBER_OF(CodeIntegrityValuesList); Index++) {
+
+                if (CodeIntegrity.CodeIntegrityOptions & CodeIntegrityValuesList[Index].dwValue) {
+                    AddParameterValue(
+                        hwndOutput, 
+                        TEXT("CI Option"), 
+                        CodeIntegrityValuesList[Index].lpDescription);
+                    CodeIntegrity.CodeIntegrityOptions &= ~CodeIntegrityValuesList[Index].dwValue;
+                }
+            }
+
+            if (CodeIntegrity.CodeIntegrityOptions) {
+                Value = 1;
+                SaveValue = CodeIntegrity.CodeIntegrityOptions;
+                while (SaveValue) {
+                    if (SaveValue & Value) {
+                        AddParameterValue32Hex(hwndOutput, TEXT("CI Option (unknown)"), Value);
+                        SaveValue &= ~Value;
+                    }
+                    Value *= 2;
+                }
+            }
         }
     }
 

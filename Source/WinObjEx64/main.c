@@ -1,12 +1,12 @@
 /*******************************************************************************
 *
-*  (C) COPYRIGHT AUTHORS, 2015 - 2019
+*  (C) COPYRIGHT AUTHORS, 2015 - 2020
 *
 *  TITLE:       MAIN.C
 *
-*  VERSION:     1.82
+*  VERSION:     1.83
 *
-*  DATE:        23 Nov 2019
+*  DATE:        30 Nov 2019
 *
 *  Program entry point and main window handler.
 *
@@ -72,7 +72,7 @@ VOID MainWindowExtrasDisableAdminFeatures(
     if (g_kdctx.hDevice == NULL) {
         SetMenuItemInfo(hExtrasSubMenu, ID_EXTRAS_SSDT, FALSE, &mii);
         SetMenuItemInfo(hExtrasSubMenu, ID_EXTRAS_PRIVATENAMESPACES, FALSE, &mii);
-        SetMenuItemInfo(hExtrasSubMenu, ID_EXTRAS_W32PSERVICETABLE, FALSE, &mii);
+        //SetMenuItemInfo(hExtrasSubMenu, ID_EXTRAS_W32PSERVICETABLE, FALSE, &mii);
         SetMenuItemInfo(hExtrasSubMenu, ID_EXTRAS_CALLBACKS, FALSE, &mii);
     }
 
@@ -91,11 +91,14 @@ VOID MainWindowExtrasDisableAdminFeatures(
     }
 
     //
-    // This feature is not unsupported in Wine.
+    // These features are not unsupported in Wine.
     //
     if (g_WinObj.IsWine) {
+        SetMenuItemInfo(hExtrasSubMenu, ID_EXTRAS_CALLBACKS, FALSE, &mii);
         SetMenuItemInfo(hExtrasSubMenu, ID_EXTRAS_DRIVERS, FALSE, &mii);
         SetMenuItemInfo(hExtrasSubMenu, ID_EXTRAS_SOFTWARELICENSECACHE, FALSE, &mii);
+        SetMenuItemInfo(hExtrasSubMenu, ID_EXTRAS_SSDT, FALSE, &mii);
+        SetMenuItemInfo(hExtrasSubMenu, ID_EXTRAS_W32PSERVICETABLE, FALSE, &mii);
     }
 }
 

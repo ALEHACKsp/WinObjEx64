@@ -1,12 +1,12 @@
 /*******************************************************************************
 *
-*  (C) COPYRIGHT AUTHORS, 2015 - 2019
+*  (C) COPYRIGHT AUTHORS, 2015 - 2020
 *
 *  TITLE:       SUP.H
 *
-*  VERSION:     1.82
+*  VERSION:     1.83
 *
-*  DATE:        11 Nov 2019
+*  DATE:        30 Nov 2019
 *
 *  Common header file for the program support routines.
 *
@@ -395,8 +395,13 @@ BOOL supGetWin32FileName(
 BOOLEAN supIsWine(
     VOID);
 
-BOOL supQuerySecureBootState(
-    _In_ PBOOLEAN pbSecureBoot);
+BOOLEAN supQuerySecureBootState(
+    _Out_ PBOOLEAN pbSecureBoot);
+
+BOOLEAN supQueryHVCIState(
+    _Out_ PBOOLEAN pbHVCIEnabled,
+    _Out_ PBOOLEAN pbHVCIStrictMode,
+    _Out_ PBOOLEAN pbHVCIIUMEnabled);
 
 HWINSTA supOpenWindowStationFromContext(
     _In_ PROP_OBJECT_INFO *Context,

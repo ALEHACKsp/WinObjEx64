@@ -1,12 +1,12 @@
 /*******************************************************************************
 *
-*  (C) COPYRIGHT AUTHORS, 2015 - 2019
+*  (C) COPYRIGHT AUTHORS, 2015 - 2020
 *
 *  TITLE:       KLDBG.C, based on KDSubmarine by Evilcry
 *
-*  VERSION:     1.82
+*  VERSION:     1.83
 *
-*  DATE:        24 Nov 2019
+*  DATE:        30 Nov 2019
 *
 *  MINIMUM SUPPORTED OS WINDOWS 7
 *
@@ -2220,40 +2220,28 @@ BOOL ObpWalkPrivateNamespaceTable(
 }
 
 /*
-* ObCollectionCreate
+* ObCollectionCreateInternal
 *
 * Purpose:
 *
-* Create collection of object directory dumped info
+* Create collection of object directory dumped info.
 *
 * Collection must be destroyed with ObCollectionDestroy after use.
 *
 * If specified will dump private namespace objects.
 *
 */
-BOOL ObCollectionCreate(
+BOOL ObCollectionCreateInternal(
     _In_ POBJECT_COLLECTION Collection,
-    _In_ BOOL fNamespace,
-    _In_ BOOL Locked
+    _In_ BOOL fNamespace
 )
 {
     BOOL bResult = FALSE;
 
-    if (Collection == NULL) {
-        return bResult;
-    }
-
-    if (!kdConnectDriver())
-        return bResult;
-
-    if (!Locked) {
-        RtlEnterCriticalSection(&g_kdctx.ListLock);
-    }
-
     Collection->Heap = RtlCreateHeap(HEAP_GROWABLE, NULL, 0, 0, NULL, NULL);
 
     if (Collection->Heap == NULL)
-        goto _FailWeLeave;
+        return FALSE;
 
     RtlSetHeapInformation(Collection->Heap, HeapEnableTerminationOnCorruption, NULL, 0);
 
@@ -2316,8 +2304,43 @@ BOOL ObCollectionCreate(
     }
 
 _FailWeLeave:
-    if (!Locked) {
-        RtlLeaveCriticalSection(&g_kdctx.ListLock);
+  
+    return bResult;
+}
+
+/*
+* ObCollectionCreate
+*
+* Purpose:
+*
+* Create collection of object directory dumped info.
+*
+* Collection must be destroyed with ObCollectionDestroy after use.
+*
+* Calls internal function.
+*
+*/
+BOOL ObCollectionCreate(
+    _In_ POBJECT_COLLECTION Collection,
+    _In_ BOOL fNamespace,
+    _In_ BOOL Locked
+)
+{
+    BOOL bResult = FALSE;
+
+    if (Collection == NULL)
+        return bResult;
+
+    if (!kdConnectDriver())
+        return bResult;
+
+    if (Locked) {
+        ObCollectionCreateInternal(Collection, fNamespace);
+    }
+    else {
+        EnterCriticalSection(&g_kdctx.ListLock);
+        ObCollectionCreateInternal(Collection, fNamespace);
+        LeaveCriticalSection(&g_kdctx.ListLock);
     }
 
     return bResult;
@@ -2338,7 +2361,7 @@ VOID ObCollectionDestroy(
     if (Collection == NULL)
         return;
 
-    RtlEnterCriticalSection(&g_kdctx.ListLock);
+    EnterCriticalSection(&g_kdctx.ListLock);
 
     if (Collection->Heap) {
         RtlDestroyHeap(Collection->Heap);
@@ -2346,7 +2369,7 @@ VOID ObCollectionDestroy(
     }
     InitializeListHead(&Collection->ListHead);
 
-    RtlLeaveCriticalSection(&g_kdctx.ListLock);
+    LeaveCriticalSection(&g_kdctx.ListLock);
 }
 
 /*
@@ -2370,7 +2393,7 @@ BOOL ObCollectionEnumerate(
     if ((Collection == NULL) || (Callback == NULL))
         return FALSE;
 
-    RtlEnterCriticalSection(&g_kdctx.ListLock);
+    EnterCriticalSection(&g_kdctx.ListLock);
 
     if (!IsListEmpty(&Collection->ListHead)) {
         Head = &Collection->ListHead;
@@ -2385,7 +2408,7 @@ BOOL ObCollectionEnumerate(
         }
     }
 
-    RtlLeaveCriticalSection(&g_kdctx.ListLock);
+    LeaveCriticalSection(&g_kdctx.ListLock);
 
     return (bCancelled == FALSE);
 }
@@ -2412,7 +2435,7 @@ POBJREF ObCollectionFindByAddress(
     if (Collection == NULL)
         return NULL;
 
-    RtlEnterCriticalSection(&g_kdctx.ListLock);
+    EnterCriticalSection(&g_kdctx.ListLock);
 
     if (IsListEmpty(&Collection->ListHead)) {
         bCollectionPresent = ObCollectionCreate(Collection, fNamespace, TRUE);
@@ -2434,7 +2457,7 @@ POBJREF ObCollectionFindByAddress(
         }
     }
 
-    RtlLeaveCriticalSection(&g_kdctx.ListLock);
+    LeaveCriticalSection(&g_kdctx.ListLock);
 
     return (bFound) ? ObjectEntry : NULL;
 }
@@ -2759,44 +2782,65 @@ BOOL kdExtractDriver(
 * Query required system information and offsets.
 *
 */
-DWORD WINAPI kdQuerySystemInformation(
+BOOL kdQuerySystemInformation(
     _In_ PVOID lpParameter
 )
 {
-    BOOL                    bResult = FALSE;
+    BOOL                    Result = FALSE;
     PKLDBGCONTEXT           Context = (PKLDBGCONTEXT)lpParameter;
     PVOID                   MappedKernel = NULL;
-    PRTL_PROCESS_MODULES    miSpace = NULL;
-    WCHAR                   NtOskrnlFullPathName[MAX_PATH * 2];
+    PRTL_PROCESS_MODULES    SystemModules = NULL;
+    WCHAR                   KernelFullPathName[MAX_PATH * 2];
 
     do {
 
-        miSpace = (PRTL_PROCESS_MODULES)supGetSystemInfo(SystemModuleInformation, NULL);
-        if (miSpace == NULL)
+        //
+        // Query "\\" directory address and remember directory object type index.
+        //
+        ObGetDirectoryObjectAddress(
+            NULL,
+            &Context->DirectoryRootAddress,
+            &Context->DirectoryTypeIndex);
+
+        //
+        // Remember system range start value.
+        //
+        Context->SystemRangeStart = supQuerySystemRangeStart();
+        if (Context->SystemRangeStart == 0) {
+            if (g_NtBuildNumber < 9200) {
+                Context->SystemRangeStart = MM_SYSTEM_RANGE_START_7;
+            }
+            else {
+                Context->SystemRangeStart = MM_SYSTEM_RANGE_START_8;
+            }
+        }
+
+        SystemModules = (PRTL_PROCESS_MODULES)supGetSystemInfo(SystemModuleInformation, NULL);
+        if (SystemModules == NULL)
             break;
 
-        if (miSpace->NumberOfModules == 0)
+        if (SystemModules->NumberOfModules == 0)
             break;
 
-        Context->NtOsBase = miSpace->Modules[0].ImageBase; //loaded kernel base
-        Context->NtOsSize = miSpace->Modules[0].ImageSize; //loaded kernel size
+        Context->NtOsBase = SystemModules->Modules[0].ImageBase; //loaded kernel base
+        Context->NtOsSize = SystemModules->Modules[0].ImageSize; //loaded kernel size
 
-        _strcpy(NtOskrnlFullPathName, g_WinObj.szSystemDirectory);
-        _strcat(NtOskrnlFullPathName, TEXT("\\"));
-
+        _strcpy(KernelFullPathName, g_WinObj.szSystemDirectory);
+        _strcat(KernelFullPathName, TEXT("\\"));
+        
         MultiByteToWideChar(
             CP_ACP,
             0,
-            (LPCSTR)&miSpace->Modules[0].FullPathName[miSpace->Modules[0].OffsetToFileName],
+            (LPCSTR)&SystemModules->Modules[0].FullPathName[SystemModules->Modules[0].OffsetToFileName],
             -1,
-            _strend(NtOskrnlFullPathName),
+            _strend(KernelFullPathName),
             MAX_PATH);
 
-        supHeapFree(miSpace);
-        miSpace = NULL;
+        supHeapFree(SystemModules);
+        SystemModules = NULL;
 
         MappedKernel = LoadLibraryEx(
-            NtOskrnlFullPathName,
+            KernelFullPathName,
             NULL,
             DONT_RESOLVE_DLL_REFERENCES);
 
@@ -2812,15 +2856,15 @@ DWORD WINAPI kdQuerySystemInformation(
             Context->ObHeaderCookie = ObpFindHeaderCookie(Context);
         }
 
-        bResult = TRUE;
+        Result = TRUE;
 
     } while (FALSE);
 
-    if (miSpace != NULL) {
-        supHeapFree(miSpace);
+    if (SystemModules != NULL) {
+        supHeapFree(SystemModules);
     }
 
-    return bResult;
+    return Result;
 }
 
 /*
@@ -2881,25 +2925,9 @@ VOID kdInit(
     }
 
     //
-    // Query "\\" directory address and remember directory object type index.
+    // Query global variables.
     //
-    ObGetDirectoryObjectAddress(
-        NULL,
-        &g_kdctx.DirectoryRootAddress,
-        &g_kdctx.DirectoryTypeIndex);
-
-    //
-    // Remember system range start value.
-    //
-    g_kdctx.SystemRangeStart = supQuerySystemRangeStart();
-    if (g_kdctx.SystemRangeStart == 0) {
-        if (g_NtBuildNumber < 9200) {
-            g_kdctx.SystemRangeStart = MM_SYSTEM_RANGE_START_7;
-        }
-        else {
-            g_kdctx.SystemRangeStart = MM_SYSTEM_RANGE_START_8;
-        }
-    }
+    kdQuerySystemInformation(&g_kdctx);
 
     //
     // No admin rights, leave.
@@ -2953,13 +2981,10 @@ VOID kdInit(
     }
 
     //
-    // Query global variables.
+    // Query Ob specific offsets.
     //
     if (g_kdctx.hDevice != NULL) {
-
         ObpInitInfoBlockOffsets();
-
-        kdQuerySystemInformation(&g_kdctx);
     }
 }
 
@@ -3112,11 +3137,10 @@ VOID kdShutdown(
 {
     WCHAR szDrvPath[MAX_PATH * 2];
 
-    if (g_kdctx.hDevice == NULL)
-        return;
-
-    CloseHandle(g_kdctx.hDevice);
-    g_kdctx.hDevice = NULL;
+    if (g_kdctx.hDevice) {
+        CloseHandle(g_kdctx.hDevice);
+        g_kdctx.hDevice = NULL;
+    }
 
     ObCollectionDestroy(&g_kdctx.ObCollection);
     RtlDeleteCriticalSection(&g_kdctx.ListLock);
@@ -3137,6 +3161,8 @@ VOID kdShutdown(
         DeleteFile(szDrvPath);
     }
 
-    if (g_kdctx.NtOsImageMap)
+    if (g_kdctx.NtOsImageMap) {
         FreeLibrary((HMODULE)g_kdctx.NtOsImageMap);
+        g_kdctx.NtOsImageMap = NULL;
+    }
 }

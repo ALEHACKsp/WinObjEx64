@@ -1,12 +1,12 @@
 /*******************************************************************************
 *
-*  (C) COPYRIGHT AUTHORS, 2015 - 2019
+*  (C) COPYRIGHT AUTHORS, 2015 - 2020
 *
 *  TITLE:       SUP.C
 *
-*  VERSION:     1.82
+*  VERSION:     1.83
 *
-*  DATE:        23 Nov 2019
+*  DATE:        30 Nov 2019
 *
 * THIS CODE AND INFORMATION IS PROVIDED "AS IS" WITHOUT WARRANTY OF
 * ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED
@@ -3335,15 +3335,18 @@ BOOLEAN supIsWine(
 * Query Firmware type and SecureBoot state if firmware is EFI.
 *
 */
-BOOL supQuerySecureBootState(
-    _In_ PBOOLEAN pbSecureBoot
+BOOLEAN supQuerySecureBootState(
+    _Out_ PBOOLEAN pbSecureBoot
 )
 {
-    BOOL    bResult = FALSE;
+    BOOLEAN bResult = FALSE;
     BOOLEAN bSecureBoot = FALSE;
     HKEY    hKey;
     DWORD   dwState, dwSize, returnLength;
     LSTATUS lRet;
+
+    if (pbSecureBoot) 
+        *pbSecureBoot = FALSE;
 
     //
     // First attempt, query firmware environment variable, will not work if not fulladmin.
@@ -3405,6 +3408,50 @@ BOOL supQuerySecureBootState(
 
     return bResult;
 }
+
+/*
+* supQueryHVCIState
+*
+* Purpose:
+*
+* Query HVCI/IUM state.
+*
+*/
+BOOLEAN supQueryHVCIState(
+    _Out_ PBOOLEAN pbHVCIEnabled,
+    _Out_ PBOOLEAN pbHVCIStrictMode,
+    _Out_ PBOOLEAN pbHVCIIUMEnabled
+)
+{
+    ULONG ReturnLength;
+    SYSTEM_CODEINTEGRITY_INFORMATION CodeIntegrity;
+
+    if (pbHVCIEnabled) *pbHVCIEnabled = FALSE;
+    if (pbHVCIStrictMode) *pbHVCIStrictMode = FALSE;
+    if (pbHVCIIUMEnabled) *pbHVCIIUMEnabled = FALSE;
+
+    CodeIntegrity.Length = sizeof(CodeIntegrity);
+    if (NT_SUCCESS(NtQuerySystemInformation(
+        SystemCodeIntegrityInformation,
+        &CodeIntegrity,
+        sizeof(CodeIntegrity),
+        &ReturnLength)))
+    {
+        *pbHVCIEnabled = ((CodeIntegrity.CodeIntegrityOptions & CODEINTEGRITY_OPTION_ENABLED) &&
+            ((CodeIntegrity.CodeIntegrityOptions & CODEINTEGRITY_OPTION_HVCI_KMCI_ENABLED)) ||
+            (CodeIntegrity.CodeIntegrityOptions & CODEINTEGRITY_OPTION_HVCI_KMCI_AUDITMODE_ENABLED));
+        
+        *pbHVCIStrictMode = *pbHVCIEnabled && 
+            (CodeIntegrity.CodeIntegrityOptions & CODEINTEGRITY_OPTION_HVCI_KMCI_STRICTMODE_ENABLED);
+
+        *pbHVCIIUMEnabled = (CodeIntegrity.CodeIntegrityOptions & CODEINTEGRITY_OPTION_HVCI_IUM_ENABLED) > 0;
+
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
 
 /*
 * supxGetWindowStationName
@@ -4113,8 +4160,14 @@ PVOID supLookupImageSectionByName(
     IMAGE_NT_HEADERS *NtHeaders = RtlImageNtHeader(DllBase);
     IMAGE_SECTION_HEADER *SectionTableEntry;
 
+    //
+    // Assume failure.
+    //
     if (SectionSize)
         *SectionSize = 0;
+
+    if (NtHeaders == NULL)
+        return NULL;
 
     SectionTableEntry = (PIMAGE_SECTION_HEADER)((PCHAR)NtHeaders +
         sizeof(ULONG) +
