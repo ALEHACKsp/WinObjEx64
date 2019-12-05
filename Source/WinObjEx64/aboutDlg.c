@@ -6,7 +6,7 @@
 *
 *  VERSION:     1.83
 *
-*  DATE:        30 Nov 2019
+*  DATE:        01 Dec 2019
 *
 * THIS CODE AND INFORMATION IS PROVIDED "AS IS" WITHOUT WARRANTY OF
 * ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED
@@ -17,8 +17,7 @@
 #include "global.h"
 #include "msvcver.h"
 #include <Richedit.h>
-
-#undef _WINE_NB_DEBUG
+#include "winedebug.h"
 
 VALUE_DESC CodeIntegrityValuesList[] = {
     { L"CODEINTEGRITY_OPTION_ENABLED", CODEINTEGRITY_OPTION_ENABLED },
@@ -111,11 +110,6 @@ VOID AboutDialogInit(
     MultiByteToWideChar(CP_ACP, 0, __TIME__, (INT)_strlen_a(__TIME__), _strend(szBuffer), 40);
     SetDlgItemText(hwndDlg, ID_ABOUT_BUILDDATE, szBuffer);
 
-#ifdef _WINE_NB_DEBUG
-    g_WinObj.IsWine = TRUE;
-    wine_ver = "4.9";
-#endif
-
     //
     // Fill OS name.
     //
@@ -136,9 +130,7 @@ VOID AboutDialogInit(
     // Fill boot options.
     //   
     if (g_WinObj.IsWine) {
-#ifndef _WINE_NB_DEBUG
         wine_ver = (PCHAR)wine_get_version();
-#endif
         wine_str = (PCHAR)supHeapAlloc(_strlen_a(wine_ver) + MAX_PATH);
         if (wine_str) {
             _strcpy_a(wine_str, "Wine ");

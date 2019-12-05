@@ -4,9 +4,9 @@
 *
 *  TITLE:       EXTRASSSDT.C
 *
-*  VERSION:     1.81
+*  VERSION:     1.83
 *
-*  DATE:        18 Oct 2019
+*  DATE:        01 Dec 2019
 *
 * THIS CODE AND INFORMATION IS PROVIDED "AS IS" WITHOUT WARRANTY OF
 * ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED
@@ -705,7 +705,6 @@ ULONG_PTR ApiSetExtractReferenceFromAdapter(
 */
 BOOLEAN ApiSetResolveWin32kTableEntry(
     _In_ ULONG_PTR ApiSetTable,
-    _In_ PBYTE MappedImageBase,
     _In_ ULONG_PTR LookupEntry,
     _Out_ PW32K_API_SET_TABLE_ENTRY *ResolvedEntry
 )
@@ -715,8 +714,6 @@ BOOLEAN ApiSetResolveWin32kTableEntry(
     ULONG EntriesCount;
     ULONG_PTR EntryValue;
     PULONG_PTR ArrayPtr;
-
-    UNREFERENCED_PARAMETER(MappedImageBase);
 
     *ResolvedEntry = NULL;
 
@@ -767,16 +764,24 @@ BOOLEAN ApiSetResolveWin32kTableEntry(
 * Function return NTSTATUS value and sets ResolvedEntry parameter.
 *
 */
+_Success_(return == STATUS_SUCCESS)
 NTSTATUS ApiSetLoadResolvedModule(
     _In_ PVOID ApiSetMap,
     _In_ PUNICODE_STRING ApiSetToResolve,
-    _Out_ PANSI_STRING ConvertedModuleName,
+    _Inout_ PANSI_STRING ConvertedModuleName,
     _Out_ HMODULE *DllModule
 )
 {
     BOOL            ResolvedResult;
     NTSTATUS        Status;
     UNICODE_STRING  usResolvedModule;
+
+    if (DllModule == NULL)
+        return STATUS_INVALID_PARAMETER_2;
+    if (ConvertedModuleName == NULL)
+        return STATUS_INVALID_PARAMETER_3;
+
+    *DllModule = NULL;
 
     ResolvedResult = FALSE;
     RtlInitEmptyUnicodeString(&usResolvedModule, NULL, 0);
@@ -838,7 +843,7 @@ NTSTATUS SdtResolveServiceEntryModule(
     _In_ ULONG_PTR Win32kApiSetTable,
     _In_ PWIN32_SHADOWTABLE ShadowTableEntry,
     _Out_ HMODULE *ResolvedModule,
-    _Out_ PANSI_STRING ResolvedModuleName,
+    _Inout_ PANSI_STRING ResolvedModuleName,
     _Out_ LPCSTR *FunctionName
 )
 {
@@ -872,13 +877,13 @@ NTSTATUS SdtResolveServiceEntryModule(
         //
         // See if this is new Win32kApiSetTable adapter.
         //
-        if (Win32kApiSetTableExpected) {
+        if (Win32kApiSetTableExpected && ApiSetMap) {
 
             ApiSetReference = ApiSetExtractReferenceFromAdapter(FunctionPtr);
             if (ApiSetReference) {
 
-                if (!ApiSetResolveWin32kTableEntry(Win32kApiSetTable,
-                    (PBYTE)MappedWin32k,
+                if (!ApiSetResolveWin32kTableEntry(
+                    Win32kApiSetTable,
                     ApiSetReference,
                     &Win32kApiSetEntry))
                 {
@@ -886,7 +891,13 @@ NTSTATUS SdtResolveServiceEntryModule(
                 }
 
                 RtlInitUnicodeString(&usApiSetEntry, Win32kApiSetEntry->Host->HostName);
-                resolveStatus = ApiSetLoadResolvedModule(ApiSetMap, &usApiSetEntry, ResolvedModuleName, &DllModule);
+                
+                resolveStatus = ApiSetLoadResolvedModule(
+                    ApiSetMap, 
+                    &usApiSetEntry, 
+                    ResolvedModuleName, 
+                    &DllModule);
+                
                 if (NT_SUCCESS(resolveStatus)) {
                     if (DllModule) {
                         *ResolvedModule = DllModule;
@@ -907,7 +918,7 @@ NTSTATUS SdtResolveServiceEntryModule(
             }
         }
 
-        JmpAddress = *(PLONG32)(FunctionPtr + (hs.len - 4)); // retrieve the offset
+        JmpAddress = *(PLONG32)(FunctionPtr + (hs.len - hs.modrm_reg)); // retrieve the offset
         FunctionPtr = FunctionPtr + hs.len + JmpAddress; // hs.len -> length of jmp instruction
 
         *FunctionName = NtRawIATEntryToImport(MappedWin32k, FunctionPtr, &ModuleName);
@@ -926,9 +937,16 @@ NTSTATUS SdtResolveServiceEntryModule(
             //
             if (NeedApiSetResolve) {
 
-                resolveStatus = ApiSetLoadResolvedModule(ApiSetMap,
-                    &usModuleName,
-                    ResolvedModuleName, &DllModule);
+                if (ApiSetMap) {
+                    resolveStatus = ApiSetLoadResolvedModule(
+                        ApiSetMap,
+                        &usModuleName,
+                        ResolvedModuleName, 
+                        &DllModule);
+                }
+                else {
+                    resolveStatus = STATUS_INVALID_PARAMETER_3;
+                }
 
                 if (!NT_SUCCESS(resolveStatus)) {
                     RtlFreeUnicodeString(&usModuleName);

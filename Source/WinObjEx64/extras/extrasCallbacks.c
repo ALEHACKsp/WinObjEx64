@@ -3320,6 +3320,17 @@ OBEX_QUERYCALLBACK_ROUTINE(QueryCallbackGeneric)
 {
     ULONG_PTR QueryAddress = 0;
 
+    //
+    // All parameters must be valid for this variant of Query callback.
+    //
+    if ((DisplayRoutine == NULL) ||
+        (FindRoutine == NULL) ||
+        (SystemCallbacksRef == NULL) ||
+        (CallbackType == NULL))
+    {
+        return STATUS_INVALID_PARAMETER;
+    }
+
     __try {
 
         QueryAddress = *SystemCallbacksRef;
@@ -3329,6 +3340,7 @@ OBEX_QUERYCALLBACK_ROUTINE(QueryCallbackGeneric)
 
         *SystemCallbacksRef = QueryAddress;
 
+
     }
     __except (EXCEPTION_EXECUTE_HANDLER) {
         return GetExceptionCode();
@@ -3336,7 +3348,8 @@ OBEX_QUERYCALLBACK_ROUTINE(QueryCallbackGeneric)
 
     __try {
         if (QueryAddress) {
-            DisplayRoutine(TreeList,
+            DisplayRoutine(
+                TreeList,
                 CallbackType,
                 QueryAddress,
                 Modules);

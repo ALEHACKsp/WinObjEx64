@@ -6,7 +6,7 @@
 *
 *  VERSION:     1.83
 *
-*  DATE:        30 Nov 2019
+*  DATE:        01 Dec 2019
 *
 * THIS CODE AND INFORMATION IS PROVIDED "AS IS" WITHOUT WARRANTY OF
 * ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED
@@ -295,7 +295,7 @@ UINT supGetDPIValue(
 
         // Scale the window to the monitor DPI
         case DPI_AWARENESS_PER_MONITOR_AWARE:
-            uDpi = g_ExtApiSet.GetDpiForWindow(hWnd);
+            if (hWnd) uDpi = g_ExtApiSet.GetDpiForWindow(hWnd);
             break;
         }
 
@@ -1545,6 +1545,8 @@ VOID supInit(
     _In_ BOOL IsFullAdmin
 )
 {
+    NTSTATUS status;
+
     CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
 
     supQueryKnownDlls();
@@ -1558,7 +1560,12 @@ VOID supInit(
     g_pObjectTypesInfo = (POBJECT_TYPES_INFORMATION)supGetObjectTypesInfo();
 
     //Result ignored intentionally and used only in debug.
-    ExApiSetInit();
+    status = ExApiSetInit();
+    if (!NT_SUCCESS(status)) {
+#ifdef _DEBUG
+        DbgPrint("ExApiSetInit() %lx\r\n", status);
+#endif
+    }
 }
 
 /*
@@ -2024,10 +2031,10 @@ BOOL supCreateSCMSnapshot(
         Snapshot->NumberOfEntries = dwServicesReturned;
     }
     else {
-        RtlEnterCriticalSection(&g_WinObj.Lock);
+        EnterCriticalSection(&g_WinObj.Lock);
         g_scmDB.Entries = Services;
         g_scmDB.NumberOfEntries = dwServicesReturned;
-        RtlLeaveCriticalSection(&g_WinObj.Lock);
+        LeaveCriticalSection(&g_WinObj.Lock);
     }
 
     return bResult;
@@ -2051,11 +2058,11 @@ VOID supFreeSCMSnapshot(
         Snapshot->Entries = NULL;
     }
     else {
-        RtlEnterCriticalSection(&g_WinObj.Lock);
+        EnterCriticalSection(&g_WinObj.Lock);
         supVirtualFree(g_scmDB.Entries);
         g_scmDB.Entries = NULL;
         g_scmDB.NumberOfEntries = 0;
-        RtlLeaveCriticalSection(&g_WinObj.Lock);
+        LeaveCriticalSection(&g_WinObj.Lock);
     }
 }
 
@@ -2225,12 +2232,12 @@ VOID sapiFreeSnapshot(
     VOID
 )
 {
-    RtlEnterCriticalSection(&g_WinObj.Lock);
+    EnterCriticalSection(&g_WinObj.Lock);
     RtlDestroyHeap(g_sapiDB.sapiHeap);
     g_sapiDB.sapiHeap = NULL;
     g_sapiDB.ListHead.Blink = NULL;
     g_sapiDB.ListHead.Flink = NULL;
-    RtlLeaveCriticalSection(&g_WinObj.Lock);
+    LeaveCriticalSection(&g_WinObj.Lock);
 }
 
 /*
@@ -2577,7 +2584,7 @@ BOOL supQueryDeviceDescription(
         }
         _strcat(lpFullDeviceName, lpDeviceName);
 
-        RtlEnterCriticalSection(&g_WinObj.Lock);
+        EnterCriticalSection(&g_WinObj.Lock);
 
         //
         // Enumerate devices.
@@ -2605,7 +2612,7 @@ BOOL supQueryDeviceDescription(
             Entry = Entry->Flink;
         }
 
-        RtlLeaveCriticalSection(&g_WinObj.Lock);
+        LeaveCriticalSection(&g_WinObj.Lock);
 
         supHeapFree(lpFullDeviceName);
     }
