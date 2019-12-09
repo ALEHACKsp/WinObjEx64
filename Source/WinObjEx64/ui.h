@@ -6,7 +6,7 @@
 *
 *  VERSION:     1.83
 *
-*  DATE:        30 Nov 2019
+*  DATE:        08 Dec 2019
 *
 *  Common header file for the user interface.
 *
@@ -65,6 +65,7 @@ typedef HWND(WINAPI *pfnHtmlHelpW)(
 #define T_SAVETOFILE            L"Save list to File"
 #define T_DUMPDRIVER            L"Dump Driver"
 #define T_VIEW_REFRESH          L"Refresh\tF5"
+#define T_RESCAN                L"Rescan"
 #define T_EMPTY                 L" "
 
 #define T_DRIVER_REQUIRED       TEXT("Support from helper driver is required for this feature.\r\n\r\n\
@@ -90,6 +91,28 @@ typedef enum _WOBJ_DIALOGS_ID {
 } WOBJ_DIALOGS_ID;
 
 #define MAX_TEXT_CONVERSION_ULONG64 32
+
+//
+// Main menu initialization id's
+//
+
+// File
+#define IDMM_FILE   0
+
+// View
+#define IDMM_VIEW   1
+
+// Object
+#define IDMM_OBJECT 2
+
+// Find
+#define IDMM_FIND   3
+
+// Extras
+#define IDMM_EXTRAS 4
+
+// Help
+#define IDMM_HELP   5
 
 //
 // Declared in main.c
@@ -222,3 +245,21 @@ static LPCWSTR g_szMonths[12] = {
     L"Nov",
     L"Dec"
 };
+
+#define wobjInitSuccess         0
+#define wobjInitNoHeap          -1
+#define wobjInitNoTemp          -2
+#define wobjInitNoWinDir        -3
+#define wobjInitNoSys32Dir      -4
+
+#define T_WOBJINIT_NOCRT TEXT("Could not initialize CRT, abort")
+#define T_WOBJINIT_NOHEAP TEXT("Could not initialize WinObjEx64, could not allocate heap")
+#define T_WOBJINIT_NOTEMP TEXT("Could not initialize WinObjEx64, could not locate %temp%")
+#define T_WOBJINIT_NOWINDIR TEXT("Could not initialize WinObjEx64, could not locate Windows directory")
+#define T_WOBJINIT_NOSYS32DIR TEXT("Could not initialize WinObjEx64, could not locate System32 directory")
+#define T_WOBJINIT_NOCLASS TEXT("Could not register WinObjEx64 window class, abort")
+#define T_WOBJINIT_NOMAINWINDOW TEXT("Could not create WinObjEx64 main window, abort")
+#define T_WOBJINIT_NOICCX TEXT("Could not initialize commctrl classes, abort")
+#define T_WOBJINIT_NOLISTWND TEXT("Could not create tree window, abort")
+#define T_WOBJINIT_NOTREEWND TEXT("Could not create list window, abort")
+#define T_WOBJINIT_NOTLBARWND TEXT("Could not create toolbar window, abort")

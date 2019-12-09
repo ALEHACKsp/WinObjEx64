@@ -6,7 +6,7 @@
 *
 *  VERSION:     1.83
 *
-*  DATE:        30 Nov 2019
+*  DATE:        08 Dec 2019
 *
 *  Program entry point and main window handler.
 *
@@ -58,7 +58,7 @@ VOID MainWindowExtrasDisableAdminFeatures(
     _In_ HWND hWnd
 )
 {
-    HMENU hExtrasSubMenu = GetSubMenu(GetMenu(hWnd), 4);
+    HMENU hExtrasSubMenu = GetSubMenu(GetMenu(hWnd), IDMM_EXTRAS);
 
     MENUITEMINFO mii;
 
@@ -375,7 +375,7 @@ LRESULT MainWindowHandleWMCommand(
     case ID_EXTRAS_PIPES:
     case ID_EXTRAS_MAILSLOTS:
     case ID_EXTRAS_USERSHAREDDATA:
-    case ID_EXTRAS_PRIVATENAMESPACES:       
+    case ID_EXTRAS_PRIVATENAMESPACES:
     case ID_EXTRAS_SSDT:
     case ID_EXTRAS_W32PSERVICETABLE:
     case ID_EXTRAS_DRIVERS:
@@ -567,9 +567,9 @@ VOID MainWindowHandleObjectPopupMenu(
         supSetMenuIcon(hMenu, ID_OBJECT_GOTOLINKTARGET,
             (ULONG_PTR)ImageList_ExtractIcon(g_WinObj.hInstance, g_ListViewImages,
                 ObManagerGetImageIndexByTypeName(OBTYPE_NAME_SYMBOLIC_LINK)));
-        uEnable &= ~MF_GRAYED;
+        uEnable = MF_BYCOMMAND;
     }
-    EnableMenuItem(GetSubMenu(GetMenu(hwnd), 2), ID_OBJECT_GOTOLINKTARGET, uEnable);
+    EnableMenuItem(GetSubMenu(GetMenu(hwnd), IDMM_OBJECT), ID_OBJECT_GOTOLINKTARGET, uEnable);
 
     TrackPopupMenu(hMenu, TPM_RIGHTBUTTON | TPM_LEFTALIGN, point->x, point->y, 0, hwnd, NULL);
     DestroyMenu(hMenu);
@@ -683,7 +683,7 @@ LRESULT MainWindowHandleWMNotify(
                 //handle sort by column
             case LVN_COLUMNCLICK:
                 bMainWndSortInverse = !bMainWndSortInverse;
-                SortColumn = ((NMLISTVIEW *)lParam)->iSubItem;
+                SortColumn = ((NMLISTVIEW*)lParam)->iSubItem;
                 ListView_SortItemsEx(g_hwndObjectList, &MainWindowObjectListCompareFunc, SortColumn);
 
                 nImageIndex = ImageList_GetImageCount(g_ListViewImages);
@@ -798,7 +798,7 @@ LRESULT CALLBACK MainWindowProc(
         RtlSecureZeroMemory(&crc, sizeof(crc));
 
         if ((HWND)wParam == g_hwndObjectTree) {
-            TreeView_GetItemRect(g_hwndObjectTree, TreeView_GetSelection(g_hwndObjectTree), &crc, TRUE);
+            TreeView_GetItemRect(g_hwndObjectTree, TreeView_GetSelection(g_hwndObjectTree), (PRECT)&crc, TRUE);
             crc.top = crc.bottom;
             ClientToScreen(g_hwndObjectTree, (LPPOINT)&crc);
             MainWindowHandleTreePopupMenu(hwnd, (LPPOINT)&crc);
@@ -895,7 +895,7 @@ LRESULT CALLBACK MainWindowProc(
 *
 */
 BOOL MainWindowDlgMsgHandler(
-    _In_ MSG msg,
+    _In_ LPMSG lpMsg,
     _In_ HACCEL hAccTable
 )
 {
@@ -903,19 +903,19 @@ BOOL MainWindowDlgMsgHandler(
 
     for (c = 0; c < wobjMaxDlgId; c++) {
         if ((g_WinObj.AuxDialogs[c] != NULL)) {
-            if (IsDialogMessage(g_WinObj.AuxDialogs[c], &msg)) {
-                TranslateAccelerator(g_WinObj.AuxDialogs[c], hAccTable, &msg);
+            if (IsDialogMessage(g_WinObj.AuxDialogs[c], lpMsg)) {
+                TranslateAccelerator(g_WinObj.AuxDialogs[c], hAccTable, lpMsg);
                 return TRUE;
             }
         }
     }
 
     if (g_DesktopPropWindow != NULL)
-        if (IsDialogMessage(g_DesktopPropWindow, &msg))
+        if (IsDialogMessage(g_DesktopPropWindow, lpMsg))
             return TRUE;
 
     if (g_PropWindow != NULL)
-        if (IsDialogMessage(g_PropWindow, &msg))
+        if (IsDialogMessage(g_PropWindow, lpMsg))
             return TRUE;
 
     return FALSE;
@@ -929,12 +929,12 @@ BOOL MainWindowDlgMsgHandler(
 * Initialize global variables.
 *
 */
-BOOL WinObjInitGlobals(
+INT WinObjInitGlobals(
     _In_ BOOLEAN IsWine)
 {
     SIZE_T cch;
-    BOOL bResult = FALSE;
-    LPWSTR *szArglist;
+    INT Result = wobjInitSuccess;
+    LPWSTR* szArglist;
     INT nArgs = 0;
 
 
@@ -960,8 +960,10 @@ BOOL WinObjInitGlobals(
         // Create dedicated heap.
         //
         g_WinObj.Heap = RtlCreateHeap(HEAP_GROWABLE, NULL, 0, 0, NULL, NULL);
-        if (g_WinObj.Heap == NULL)
+        if (g_WinObj.Heap == NULL) {
+            Result = wobjInitNoHeap;
             break;
+        }
 
         if (IsWine == FALSE) {
             RtlSetHeapInformation(g_WinObj.Heap, HeapEnableTerminationOnCorruption, NULL, 0);
@@ -972,20 +974,26 @@ BOOL WinObjInitGlobals(
         // Remember %TEMP% directory.
         //
         cch = ExpandEnvironmentStrings(L"%temp%", g_WinObj.szTempDirectory, MAX_PATH);
-        if ((cch == 0) || (cch > MAX_PATH))
+        if ((cch == 0) || (cch > MAX_PATH)) {
+            Result = wobjInitNoTemp;
             break;
+        }
 
         //
         // Remember Windows directory.
         //
-        if (!GetWindowsDirectory(g_WinObj.szWindowsDirectory, MAX_PATH))
+        if (!GetWindowsDirectory(g_WinObj.szWindowsDirectory, MAX_PATH)) {
+            Result = wobjInitNoWinDir;
             break;
+        }
 
         //
         // Remember System32 directory.
         //
-        if (!GetSystemDirectory(g_WinObj.szSystemDirectory, MAX_PATH))
+        if (!GetSystemDirectory(g_WinObj.szSystemDirectory, MAX_PATH)) {
+            Result = wobjInitNoSys32Dir;
             break;
+        }
 
         //
         // Check command line parameters.
@@ -998,16 +1006,16 @@ BOOL WinObjInitGlobals(
             LocalFree(szArglist);
         }
 
-        bResult = TRUE;
+        Result = wobjInitSuccess;
 
     } while (FALSE);
 
-    if (bResult == FALSE) {
+    if (Result != wobjInitSuccess) {
         if (g_WinObj.Heap)
             RtlDestroyHeap(g_WinObj.Heap);
     }
 
-    return bResult;
+    return Result;
 }
 
 /*
@@ -1021,46 +1029,73 @@ BOOL WinObjInitGlobals(
 UINT WinObjExMain()
 {
     BOOLEAN                 IsWine = FALSE;
-    MSG                     msg1;
-    WNDCLASSEX              wincls;
-    BOOL                    IsFullAdmin = FALSE, rv = TRUE, bLocalSystem = FALSE;
-    ATOM                    class_atom = 0;
-    INITCOMMONCONTROLSEX    icc;
-    LVCOLUMN                col;
-    SHSTOCKICONINFO         sii;
+
+    ATOM                    classAtom = 0;
+    BOOL                    bIsFullAdmin = FALSE, bRet = TRUE, bLocalSystem = FALSE;
+
+    HWND                    hDesktopWnd = GetDesktopWindow();
     HMENU                   hMenu;
     HACCEL                  hAccTable = 0;
-    WCHAR                   szWindowTitle[100];
     HICON                   hIcon;
-    HANDLE                  hToken;
+    HANDLE                  processToken;
+
+    MSG                     msg;
+    LVCOLUMN                col;
+    INITCOMMONCONTROLSEX    iccx;
+    WNDCLASSEX              wndClass;
     HIMAGELIST              TreeViewImages;
+
+    WCHAR                   szWindowTitle[100];
 
     IsWine = supIsWine();
 
-    if (!supInitNtdllCRT(IsWine)) {
-        MessageBox(GetDesktopWindow(), TEXT("Could not initialize CRT"), NULL, MB_ICONERROR);
+    if (!supInitMSVCRT()) {
+        MessageBox(hDesktopWnd, T_WOBJINIT_NOCRT, NULL, MB_ICONERROR);
         return ERROR_APP_INIT_FAILURE;
     }
 
     //
-    // wine 1.6 xenial does not suport this routine.
+    // Wine 1.6 xenial does not suport this routine.
     //
     if (IsWine == FALSE) {
         RtlSetHeapInformation(NULL, HeapEnableTerminationOnCorruption, NULL, 0);
     }
 
-    if (!WinObjInitGlobals(IsWine))
+    switch (WinObjInitGlobals(IsWine)) {
+
+    case wobjInitNoHeap:
+        MessageBox(hDesktopWnd, T_WOBJINIT_NOHEAP, NULL, MB_ICONERROR);
         return ERROR_APP_INIT_FAILURE;
 
-    // do not move anywhere
-    IsFullAdmin = supUserIsFullAdmin();
+    case wobjInitNoTemp:
+        MessageBox(hDesktopWnd, T_WOBJINIT_NOTEMP, NULL, MB_ICONERROR);
+        return ERROR_APP_INIT_FAILURE;
 
-    // check compatibility
-    if (IsWine != FALSE) {
-        IsFullAdmin = FALSE;
+    case wobjInitNoWinDir:
+        MessageBox(hDesktopWnd, T_WOBJINIT_NOWINDIR, NULL, MB_ICONERROR);
+        return ERROR_APP_INIT_FAILURE;
+
+    case wobjInitNoSys32Dir:
+        MessageBox(hDesktopWnd, T_WOBJINIT_NOSYS32DIR, NULL, MB_ICONERROR);
+        return ERROR_APP_INIT_FAILURE;
+
+    default:
+        break;
     }
 
-    supInit(IsFullAdmin);
+    //
+    // !Do not move anywhere!
+    //
+    bIsFullAdmin = supUserIsFullAdmin();
+
+    //
+    // Drop admin related features on Wine.
+    //
+    if (IsWine != FALSE) {
+        bIsFullAdmin = FALSE;
+    }
+
+    supInit(bIsFullAdmin);
 
 #ifdef _DEBUG
     TestStart();
@@ -1070,14 +1105,14 @@ UINT WinObjExMain()
         //
         // Create main window and it components.
         //
-        wincls.cbSize = sizeof(WNDCLASSEX);
-        wincls.style = 0;
-        wincls.lpfnWndProc = &MainWindowProc;
-        wincls.cbClsExtra = 0;
-        wincls.cbWndExtra = 0;
-        wincls.hInstance = g_WinObj.hInstance;
+        wndClass.cbSize = sizeof(WNDCLASSEX);
+        wndClass.style = 0;
+        wndClass.lpfnWndProc = &MainWindowProc;
+        wndClass.cbClsExtra = 0;
+        wndClass.cbWndExtra = 0;
+        wndClass.hInstance = g_WinObj.hInstance;
 
-        wincls.hIcon = (HICON)LoadImage(
+        wndClass.hIcon = (HICON)LoadImage(
             g_WinObj.hInstance,
             MAKEINTRESOURCE(IDI_ICON_MAIN),
             IMAGE_ICON,
@@ -1085,7 +1120,7 @@ UINT WinObjExMain()
             0,
             LR_SHARED);
 
-        wincls.hCursor = (HCURSOR)LoadImage(
+        wndClass.hCursor = (HCURSOR)LoadImage(
             NULL,
             MAKEINTRESOURCE(OCR_SIZEWE),
             IMAGE_CURSOR,
@@ -1093,23 +1128,25 @@ UINT WinObjExMain()
             0,
             LR_SHARED);
 
-        wincls.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
-        wincls.lpszMenuName = MAKEINTRESOURCE(IDR_MENU1);
-        wincls.lpszClassName = MAINWINDOWCLASSNAME;
-        wincls.hIconSm = 0;
+        wndClass.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+        wndClass.lpszMenuName = MAKEINTRESOURCE(IDR_MENU1);
+        wndClass.lpszClassName = MAINWINDOWCLASSNAME;
+        wndClass.hIconSm = 0;
 
-        class_atom = RegisterClassEx(&wincls);
-        if (class_atom == 0)
+        classAtom = RegisterClassEx(&wndClass);
+        if (classAtom == 0) {
+            MessageBox(hDesktopWnd, T_WOBJINIT_NOCLASS, NULL, MB_ICONERROR);
             break;
+        }
 
         RtlSecureZeroMemory(szWindowTitle, sizeof(szWindowTitle));
         _strcpy(szWindowTitle, PROGRAM_NAME);
-        if (IsFullAdmin != FALSE) {
-            _strcat(szWindowTitle, L" (Administrator)");
+        if (bIsFullAdmin != FALSE) {
+            _strcat(szWindowTitle, TEXT(" (Administrator)"));
         }
 
         if (IsWine != FALSE) {
-            _strcat(szWindowTitle, L" (Wine)");
+            _strcat(szWindowTitle, TEXT(" (Wine)"));
         }
 
         //
@@ -1117,7 +1154,7 @@ UINT WinObjExMain()
         //
         MainWindow = CreateWindowEx(
             0,
-            MAKEINTATOM(class_atom),
+            MAKEINTATOM(classAtom),
             szWindowTitle,
             WS_VISIBLE | WS_OVERLAPPEDWINDOW,
             CW_USEDEFAULT,
@@ -1129,13 +1166,17 @@ UINT WinObjExMain()
             g_WinObj.hInstance,
             NULL);
 
-        if (MainWindow == NULL)
+        if (MainWindow == NULL) {
+            MessageBox(hDesktopWnd, T_WOBJINIT_NOMAINWINDOW, NULL, MB_ICONERROR);
             break;
+        }
 
-        icc.dwSize = sizeof(icc);
-        icc.dwICC = ICC_LISTVIEW_CLASSES | ICC_TREEVIEW_CLASSES | ICC_BAR_CLASSES | ICC_TAB_CLASSES;
-        if (!InitCommonControlsEx(&icc))
+        iccx.dwSize = sizeof(iccx);
+        iccx.dwICC = ICC_LISTVIEW_CLASSES | ICC_TREEVIEW_CLASSES | ICC_BAR_CLASSES | ICC_TAB_CLASSES;
+        if (!InitCommonControlsEx(&iccx)) {
+            MessageBox(hDesktopWnd, T_WOBJINIT_NOICCX, NULL, MB_ICONERROR);
             break;
+        }
 
         //
         // Status Bar window.
@@ -1172,8 +1213,10 @@ UINT WinObjExMain()
             g_WinObj.hInstance,
             NULL);
 
-        if (g_hwndObjectTree == NULL)
+        if (g_hwndObjectTree == NULL) {
+            MessageBox(hDesktopWnd, T_WOBJINIT_NOTREEWND, NULL, MB_ICONERROR);
             break;
+        }
 
         //
         // ListView window.
@@ -1193,8 +1236,10 @@ UINT WinObjExMain()
             g_WinObj.hInstance,
             NULL);
 
-        if (g_hwndObjectList == NULL)
+        if (g_hwndObjectList == NULL) {
+            MessageBox(hDesktopWnd, T_WOBJINIT_NOLISTWND, NULL, MB_ICONERROR);
             break;
+        }
 
         //
         // Toolbar window.
@@ -1214,8 +1259,10 @@ UINT WinObjExMain()
             g_WinObj.hInstance,
             NULL);
 
-        if (hwndToolBar == NULL)
+        if (hwndToolBar == NULL) {
+            MessageBox(hDesktopWnd, T_WOBJINIT_NOTLBARWND, NULL, MB_ICONERROR);
             break;
+        }
 
         //
         // Spliter window.
@@ -1265,37 +1312,42 @@ UINT WinObjExMain()
             //
             // We are running as user, add menu item to request elevation.
             //
-            if (IsFullAdmin == FALSE) {
-                hMenu = GetSubMenu(GetMenu(MainWindow), 0);
+            if (bIsFullAdmin == FALSE) {
+                hMenu = GetSubMenu(GetMenu(MainWindow), IDMM_FILE);
                 InsertMenu(hMenu, 0, MF_BYPOSITION, ID_FILE_RUNASADMIN, T_RUNASADMIN);
                 InsertMenu(hMenu, 1, MF_BYPOSITION | MF_SEPARATOR, 0, NULL);
-                //set menu shield icon
-                RtlSecureZeroMemory(&sii, sizeof(sii));
-                sii.cbSize = sizeof(sii);
-                if (SHGetStockIconInfo(SIID_SHIELD, SHGSI_ICON | SHGFI_SMALLICON, &sii) == S_OK) {
-                    supSetMenuIcon(hMenu, ID_FILE_RUNASADMIN, (ULONG_PTR)sii.hIcon);
-                }
+
+                //
+                // Set menu shield icon.
+                //
+                hIcon = supGetStockIcon(SIID_SHIELD, SHGSI_ICON | SHGFI_SMALLICON);
+                if (hIcon)
+                    supSetMenuIcon(hMenu, ID_FILE_RUNASADMIN, (ULONG_PTR)hIcon);
+
             }
             else {
                 //
                 // We are running with admin privileges, determine if we need to 
                 // insert run as LocalSystem menu entry.
                 //
-                hToken = supGetCurrentProcessToken();
-                if (hToken) {
-                    if (NT_SUCCESS(supIsLocalSystem(hToken, &bLocalSystem))) {
+                processToken = supGetCurrentProcessToken();
+                if (processToken) {
+                    if (NT_SUCCESS(supIsLocalSystem(processToken, &bLocalSystem))) {
                         if (bLocalSystem == FALSE) {
                             //
                             // Not LocalSystem account, insert item.
                             //
-                            hMenu = GetSubMenu(GetMenu(MainWindow), 0);
+                            hMenu = GetSubMenu(GetMenu(MainWindow), IDMM_FILE);
                             InsertMenu(hMenu, 0, MF_BYPOSITION, ID_FILE_RUNASADMIN, T_RUNASSYSTEM);
                             InsertMenu(hMenu, 1, MF_BYPOSITION | MF_SEPARATOR, 0, NULL);
-                            RtlSecureZeroMemory(&sii, sizeof(sii));
-                            sii.cbSize = sizeof(sii);
-                            if (SHGetStockIconInfo(SIID_DESKTOPPC, SHGSI_ICON | SHGFI_SMALLICON, &sii) == S_OK) {
-                                supSetMenuIcon(hMenu, ID_FILE_RUNASADMIN, (ULONG_PTR)sii.hIcon);
-                            }
+
+                            //
+                            // Set menu LocalSystem icon.
+                            //
+                            hIcon = supGetStockIcon(SIID_DESKTOPPC, SHGSI_ICON | SHGFI_SMALLICON);
+                            if (hIcon)
+                                supSetMenuIcon(hMenu, ID_FILE_RUNASADMIN, (ULONG_PTR)hIcon);
+
                         }
                         else {
                             //
@@ -1307,7 +1359,7 @@ UINT WinObjExMain()
                             SetWindowText(MainWindow, szWindowTitle);
                         }
                     }
-                    NtClose(hToken);
+                    NtClose(processToken);
                 }
             }
         }
@@ -1356,12 +1408,12 @@ UINT WinObjExMain()
         }
 
         //set menu icons
-        hMenu = GetSubMenu(GetMenu(MainWindow), 1);
+        hMenu = GetSubMenu(GetMenu(MainWindow), IDMM_VIEW);
         if (hMenu && g_ToolBarMenuImages) {
             supSetMenuIcon(hMenu, ID_VIEW_REFRESH,
                 (ULONG_PTR)ImageList_ExtractIcon(g_WinObj.hInstance, g_ToolBarMenuImages, 1));
         }
-        hMenu = GetSubMenu(GetMenu(MainWindow), 2);
+        hMenu = GetSubMenu(GetMenu(MainWindow), IDMM_OBJECT);
         if (hMenu && g_ListViewImages) {
             supSetMenuIcon(hMenu, ID_OBJECT_PROPERTIES,
                 (ULONG_PTR)ImageList_ExtractIcon(g_WinObj.hInstance, g_ToolBarMenuImages, 0));
@@ -1371,49 +1423,61 @@ UINT WinObjExMain()
         }
 
         //set object -> find object menu image
-        hMenu = GetSubMenu(GetMenu(MainWindow), 3);
+        hMenu = GetSubMenu(GetMenu(MainWindow), IDMM_FIND);
         if (hMenu && g_ToolBarMenuImages) {
             supSetMenuIcon(hMenu, ID_FIND_FINDOBJECT,
                 (ULONG_PTR)ImageList_ExtractIcon(g_WinObj.hInstance, g_ToolBarMenuImages, 2));
         }
 
-        //set extras -> menu images
-        hMenu = GetSubMenu(GetMenu(MainWindow), 4);
+        //
+        // Set extras -> menu images.
+        //
+        hMenu = GetSubMenu(GetMenu(MainWindow), IDMM_EXTRAS);
         if (hMenu && g_ToolBarMenuImages) {
-            // pipes & mailslots
+
+            //
+            // Pipes & mailslots images.
+            //
             supSetMenuIcon(hMenu, ID_EXTRAS_MAILSLOTS,
                 (ULONG_PTR)ImageList_ExtractIcon(g_WinObj.hInstance, g_ToolBarMenuImages, 5));
             supSetMenuIcon(hMenu, ID_EXTRAS_PIPES,
                 (ULONG_PTR)ImageList_ExtractIcon(g_WinObj.hInstance, g_ToolBarMenuImages, 6));
 
-            // process list menu image
-            RtlSecureZeroMemory(&sii, sizeof(sii));
-            sii.cbSize = sizeof(sii);
-            if (SHGetStockIconInfo(SIID_APPLICATION, SHGSI_ICON | SHGFI_SMALLICON, &sii) == S_OK) {
-                supSetMenuIcon(hMenu, ID_EXTRAS_PROCESSLIST, (ULONG_PTR)sii.hIcon);
-            }
+            //
+            // Process list menu image.
+            //
+            hIcon = supGetStockIcon(SIID_APPLICATION, SHGSI_ICON | SHGFI_SMALLICON);
+            if (hIcon)
+                supSetMenuIcon(hMenu, ID_EXTRAS_PROCESSLIST, (ULONG_PTR)hIcon);
 
-            // private namespaces menu image
-            if (SHGetStockIconInfo(SIID_STACK, SHGSI_ICON | SHGFI_SMALLICON, &sii) == S_OK) {
-                supSetMenuIcon(hMenu, ID_EXTRAS_PRIVATENAMESPACES, (ULONG_PTR)sii.hIcon);
-            }
+            //
+            // Private namespaces menu image.
+            //
+            hIcon = supGetStockIcon(SIID_STACK, SHGSI_ICON | SHGFI_SMALLICON);
+            if (hIcon)
+                supSetMenuIcon(hMenu, ID_EXTRAS_PRIVATENAMESPACES, (ULONG_PTR)hIcon);
+
         }
 
-        //set help menu image
-        hMenu = GetSubMenu(GetMenu(MainWindow), 5);
+        //
+        // Set help menu image.
+        //
+        hMenu = GetSubMenu(GetMenu(MainWindow), IDMM_HELP);
         if (hMenu) {
-            RtlSecureZeroMemory(&sii, sizeof(sii));
-            sii.cbSize = sizeof(sii);
-            if (SHGetStockIconInfo(SIID_HELP, SHGSI_ICON | SHGFI_SMALLICON, &sii) == S_OK) {
-                supSetMenuIcon(hMenu, ID_HELP_HELP, (ULONG_PTR)sii.hIcon);
-            }
+
+            hIcon = supGetStockIcon(SIID_HELP, SHGSI_ICON | SHGFI_SMALLICON);
+            if (hIcon)
+                supSetMenuIcon(hMenu, ID_HELP_HELP, (ULONG_PTR)hIcon);
+
         }
 
         hAccTable = LoadAccelerators(g_WinObj.hInstance, MAKEINTRESOURCE(IDR_ACCELERATOR1));
 
         PluginManagerCreate(MainWindow);
 
-        //create ObjectList columns
+        //
+        // Create ObjectList columns.
+        //
         RtlSecureZeroMemory(&col, sizeof(col));
         col.mask = LVCF_TEXT | LVCF_SUBITEM | LVCF_FMT | LVCF_WIDTH | LVCF_ORDER | LVCF_IMAGE;
         col.iSubItem = 1;
@@ -1449,27 +1513,28 @@ UINT WinObjExMain()
         SetFocus(g_hwndObjectTree);
 
         do {
-            rv = GetMessage(&msg1, NULL, 0, 0);
+            bRet = GetMessage(&msg, NULL, 0, 0);
 
-            if (rv == -1)
+            if (bRet == -1)
                 break;
 
-            if (MainWindowDlgMsgHandler(msg1, hAccTable))
+            if (MainWindowDlgMsgHandler(&msg, hAccTable))
                 continue;
 
-            if (IsDialogMessage(MainWindow, &msg1)) {
-                TranslateAccelerator(MainWindow, hAccTable, &msg1);
+            if (IsDialogMessage(MainWindow, &msg)) {
+                TranslateAccelerator(MainWindow, hAccTable, &msg);
                 continue;
             }
 
-            TranslateMessage(&msg1);
-            DispatchMessage(&msg1);
-        } while (rv != 0);
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+
+        } while (bRet != 0);
 
     } while (FALSE);
 
-    if (class_atom != 0)
-        UnregisterClass(MAKEINTATOM(class_atom), g_WinObj.hInstance);
+    if (classAtom != 0)
+        UnregisterClass(MAKEINTATOM(classAtom), g_WinObj.hInstance);
 
     if (g_TreeListAtom != 0)
         UnregisterClass(MAKEINTATOM(g_TreeListAtom), g_WinObj.hInstance);
@@ -1506,7 +1571,7 @@ void main()
 #pragma comment(linker, "/ENTRY:WinMain")
 int CALLBACK WinMain(
     _In_ HINSTANCE hInstance,
-    _In_ HINSTANCE hPrevInstance,
+    _In_opt_ HINSTANCE hPrevInstance,
     _In_ LPSTR     lpCmdLine,
     _In_ int       nCmdShow
 )

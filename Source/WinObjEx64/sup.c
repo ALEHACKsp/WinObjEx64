@@ -6,7 +6,7 @@
 *
 *  VERSION:     1.83
 *
-*  DATE:        01 Dec 2019
+*  DATE:        08 Dec 2019
 *
 * THIS CODE AND INFORMATION IS PROVIDED "AS IS" WITHOUT WARRANTY OF
 * ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED
@@ -58,31 +58,37 @@ int __cdecl supxHandlesLookupCallback2(
     void const* second);
 
 /*
-* supInitNtdllCRT
+* supInitMSVCRT
 *
 * Purpose:
 *
-* Init ms crt routines.
+* Init MS CRT routines.
 *
 */
-BOOL supInitNtdllCRT(
-    _In_ BOOL IsWine
+BOOL supInitMSVCRT(
+    VOID
 )
 {
-    HMODULE hdll;
+    HMODULE DllHandle;
 
-    if (IsWine) {
-        hdll = GetModuleHandle(TEXT("msvcrt.dll"));
-        if (hdll == NULL)
-            hdll = LoadLibraryEx(TEXT("msvcrt.dll"), NULL, 0);
-    }
-    else {
-        hdll = GetModuleHandle(TEXT("ntdll.dll"));
+    DllHandle = GetModuleHandle(TEXT("ntdll.dll"));
+
+    if (DllHandle) {
+        rtl_swprintf_s = (pswprintf_s)GetProcAddress(DllHandle, "swprintf_s");
+        rtl_qsort = (pqsort)GetProcAddress(DllHandle, "qsort");
     }
 
-    if (hdll) {
-        rtl_swprintf_s = (pswprintf_s)GetProcAddress(hdll, "swprintf_s");
-        rtl_qsort = (pqsort)GetProcAddress(hdll, "qsort");
+    if (rtl_swprintf_s == NULL ||
+        rtl_qsort == NULL)
+    {
+        DllHandle = GetModuleHandle(TEXT("msvcrt.dll"));
+        if (DllHandle == NULL)
+            DllHandle = LoadLibraryEx(TEXT("msvcrt.dll"), NULL, 0);
+
+        if (DllHandle) {
+            rtl_swprintf_s = (pswprintf_s)GetProcAddress(DllHandle, "swprintf_s");
+            rtl_qsort = (pqsort)GetProcAddress(DllHandle, "qsort");
+        }
     }
 
     return ((rtl_swprintf_s != NULL) && (rtl_qsort != NULL));
@@ -282,18 +288,18 @@ UINT supGetDPIValue(
     DPI_AWARENESS dpiAwareness;
 
     if (g_NtBuildNumber >= 14393) {
-        
+
         dpiAwareness = g_ExtApiSet.GetAwarenessFromDpiAwarenessContext(
             g_ExtApiSet.GetThreadDpiAwarenessContext());
 
         switch (dpiAwareness) {
 
-        // Scale the window to the system DPI
+            // Scale the window to the system DPI
         case DPI_AWARENESS_SYSTEM_AWARE:
             uDpi = g_ExtApiSet.GetDpiForSystem();
             break;
 
-        // Scale the window to the monitor DPI
+            // Scale the window to the monitor DPI
         case DPI_AWARENESS_PER_MONITOR_AWARE:
             if (hWnd) uDpi = g_ExtApiSet.GetDpiForWindow(hWnd);
             break;
@@ -321,7 +327,7 @@ UINT supGetDPIValue(
 */
 BOOL supInitTreeListForDump(
     _In_ HWND hwndParent,
-    _Out_ HWND *pTreeListHwnd
+    _Out_ HWND* pTreeListHwnd
 )
 {
     HWND     TreeList, hWndGroupBox;
@@ -334,7 +340,7 @@ BOOL supInitTreeListForDump(
     if (pTreeListHwnd == NULL) {
         return FALSE;
     }
-    
+
     uDpi = supGetDPIValue(NULL);
     dpiScaledX = MulDiv(TreeListDumpObjWndPosX, uDpi, DefaultSystemDpi);
     dpiScaledY = MulDiv(TreeListDumpObjWndPosY, uDpi, DefaultSystemDpi);
@@ -342,11 +348,11 @@ BOOL supInitTreeListForDump(
     hWndGroupBox = GetDlgItem(hwndParent, ID_OBJECTDUMPGROUPBOX);
     GetWindowRect(hWndGroupBox, &rc);
     iScaleSub = MulDiv(TreeListDumpObjWndScaleSub, uDpi, DefaultSystemDpi);
-    iScaledWidth = (rc.right - rc.left) - dpiScaledX  - iScaleSub;
+    iScaledWidth = (rc.right - rc.left) - dpiScaledX - iScaleSub;
     iScaledHeight = (rc.bottom - rc.top) - dpiScaledY - iScaleSub;
 
     TreeList = CreateWindowEx(WS_EX_STATICEDGE, WC_TREELIST, NULL,
-        WS_VISIBLE | WS_CHILD | WS_TABSTOP | TLSTYLE_COLAUTOEXPAND | TLSTYLE_LINKLINES, 
+        WS_VISIBLE | WS_CHILD | WS_TABSTOP | TLSTYLE_COLAUTOEXPAND | TLSTYLE_LINKLINES,
         dpiScaledX, dpiScaledY,
         iScaledWidth, iScaledHeight, hwndParent, NULL, NULL, NULL);
 
@@ -417,8 +423,8 @@ VOID supClipboardCopy(
 */
 BOOL supQueryObjectFromHandle(
     _In_ HANDLE Object,
-    _Out_ ULONG_PTR *Address,
-    _Out_opt_ USHORT *TypeIndex
+    _Out_ ULONG_PTR* Address,
+    _Out_opt_ USHORT* TypeIndex
 )
 {
     BOOL   bFound = FALSE;
@@ -466,8 +472,8 @@ BOOL supQueryObjectFromHandle(
 BOOL supQueryObjectFromHandleDump(
     _In_ HANDLE Object,
     _In_ PSYSTEM_HANDLE_INFORMATION_EX HandleDump,
-    _Out_ ULONG_PTR *Address,
-    _Out_opt_ USHORT *TypeIndex
+    _Out_ ULONG_PTR* Address,
+    _Out_opt_ USHORT* TypeIndex
 )
 {
     BOOL   bFound = FALSE;
@@ -504,7 +510,7 @@ BOOL supQueryObjectFromHandleDump(
 BOOL supDumpSyscallTableConverted(
     _In_ ULONG_PTR ServiceTableAddress,
     _In_ ULONG ServiceLimit,
-    _Out_ PUTable *Table
+    _Out_ PUTable* Table
 )
 {
     ULONG   ServiceId, memIO, bytesRead;
@@ -575,7 +581,7 @@ VOID supShowHelp(
     _strcat(szHelpFile, L"\\winobjex64.chm");
 
     if (!PathFileExists(szHelpFile)) {
-        s = (LPWSTR)supHeapAlloc((MAX_PATH * 2) + (_strlen(szHelpFile) * sizeof(WCHAR)));
+        s = (LPWSTR)supHeapAlloc((MAX_PATH + _strlen(szHelpFile)) * sizeof(WCHAR));
         if (s) {
             _strcpy(s, TEXT("Help file could not be found - "));
             _strcat(s, szHelpFile);
@@ -701,14 +707,14 @@ HICON supGetMainIcon(
 *
 */
 void supCopyMemory(
-    _Inout_ void *dest,
+    _Inout_ void* dest,
     _In_ size_t cbdest,
-    _In_ const void *src,
+    _In_ const void* src,
     _In_ size_t cbsrc
 )
 {
-    char *d = (char*)dest;
-    char *s = (char*)src;
+    char* d = (char*)dest;
+    char* s = (char*)src;
 
     if ((dest == 0) || (src == 0) || (cbdest == 0))
         return;
@@ -1073,7 +1079,7 @@ LPWSTR supGetItemText2(
     _In_ HWND ListView,
     _In_ INT nItem,
     _In_ INT nSubItem,
-    _In_ WCHAR *pszText,
+    _In_ WCHAR* pszText,
     _In_ UINT cchText
 )
 {
@@ -1396,7 +1402,7 @@ VOID supSetGotoLinkTargetToolButtonState(
             }
         }
     }
-    EnableMenuItem(GetSubMenu(GetMenu(hwnd), 2), ID_OBJECT_GOTOLINKTARGET, uEnable);
+    EnableMenuItem(GetSubMenu(GetMenu(hwnd), IDMM_OBJECT), ID_OBJECT_GOTOLINKTARGET, uEnable);
 }
 
 /*
@@ -1484,7 +1490,7 @@ VOID supCreateToolbarButtons(
 */
 BOOL supxQueryKnownDllsLink(
     _In_ PUNICODE_STRING ObjectName,
-    _In_ PVOID *lpKnownDllsBuffer
+    _In_ PVOID* lpKnownDllsBuffer
 )
 {
     BOOL                bResult = FALSE;
@@ -1575,7 +1581,7 @@ VOID supInit(
 *
 * Free support subset related resources.
 *
-* Must be called once in the end of program execution.
+* Must be called once at the end of program execution.
 *
 */
 VOID supShutdown(
@@ -1590,8 +1596,8 @@ VOID supShutdown(
     if (g_pObjectTypesInfo) supHeapFree(g_pObjectTypesInfo);
     if (g_lpKnownDlls32) supHeapFree(g_lpKnownDlls32);
     if (g_lpKnownDlls64) supHeapFree(g_lpKnownDlls64);
-    if (g_pSDT) supHeapFree(g_pSDT);
-    if (g_pSDTShadow) supHeapFree(g_pSDTShadow);
+
+    SdtFreeGlobals();
 }
 
 /*
@@ -1797,7 +1803,7 @@ BOOL supQueryThreadWin32StartAddress(
 BOOL supQueryProcessEntryById(
     _In_ HANDLE UniqueProcessId,
     _In_ PVOID ProcessList,
-    _Out_ PSYSTEM_PROCESSES_INFORMATION *Entry
+    _Out_ PSYSTEM_PROCESSES_INFORMATION* Entry
 )
 {
     ULONG NextEntryDelta = 0;
@@ -1848,7 +1854,7 @@ BOOL supQueryProcessNameByEPROCESS(
     DWORD  CurrentProcessId = GetCurrentProcessId();
     ULONG NextEntryDelta = 0, NumberOfProcesses = 0, i, j, ProcessListCount = 0;
     HANDLE hProcess = NULL;
-    OBEX_PROCESS_LOOKUP_ENTRY *SavedProcessList;
+    OBEX_PROCESS_LOOKUP_ENTRY* SavedProcessList;
     PSYSTEM_HANDLE_INFORMATION_EX pHandles;
 
     union {
@@ -1874,7 +1880,7 @@ BOOL supQueryProcessNameByEPROCESS(
 
     List.ListRef = (PBYTE)ProcessList;
 
-    ProcessListCount = 0;   
+    ProcessListCount = 0;
 
     //
     // Build process handle list.
@@ -1953,7 +1959,7 @@ BOOL supQueryProcessNameByEPROCESS(
 */
 BOOL supCreateSCMSnapshot(
     _In_ ULONG ServiceType,
-    _Out_opt_ SCMDB *Snapshot
+    _Out_opt_ SCMDB* Snapshot
 )
 {
     BOOL      bResult = FALSE;
@@ -2049,7 +2055,7 @@ BOOL supCreateSCMSnapshot(
 *
 */
 VOID supFreeSCMSnapshot(
-    _In_opt_ SCMDB *Snapshot)
+    _In_opt_ SCMDB* Snapshot)
 {
     if (Snapshot) {
         if ((Snapshot->Entries) && (Snapshot->NumberOfEntries))
@@ -2077,10 +2083,10 @@ VOID supFreeSCMSnapshot(
 BOOL sapiQueryDeviceProperty(
     _In_ HANDLE SnapshotHeap,
     _In_ HDEVINFO hDevInfo,
-    _In_ SP_DEVINFO_DATA *pDevInfoData,
+    _In_ SP_DEVINFO_DATA* pDevInfoData,
     _In_ ULONG Property,
-    _Out_ LPWSTR *PropertyBuffer,
-    _Out_opt_ ULONG *PropertyBufferSize
+    _Out_ LPWSTR* PropertyBuffer,
+    _Out_opt_ ULONG* PropertyBufferSize
 )
 {
     BOOL   result;
@@ -2254,7 +2260,7 @@ BOOL WINAPI supCallbackShowChildWindow(
 )
 {
     RECT r1;
-    ENUMCHILDWNDDATA *Data = (PENUMCHILDWNDDATA)lParam;
+    ENUMCHILDWNDDATA* Data = (PENUMCHILDWNDDATA)lParam;
 
     if (GetWindowRect(hwnd, &r1)) {
         if (PtInRect(&Data->Rect, *(POINT*)&r1))
@@ -2271,7 +2277,7 @@ BOOL WINAPI supCallbackShowChildWindow(
 typedef struct _WINSTA_DESC_ARRAY {
     LPWSTR lpszWinSta;
     LPWSTR lpszDesc;
-} WINSTA_DESC_ARRAY, *PWINSTA_DESC_ARRAY;
+} WINSTA_DESC_ARRAY, * PWINSTA_DESC_ARRAY;
 
 #define MAX_KNOWN_WINSTA_DESCRIPTIONS 4
 
@@ -3013,7 +3019,7 @@ HANDLE supOpenDirectoryForObject(
 *
 * Purpose:
 *
-* Display SaveDialog
+* Display SaveDialog.
 *
 */
 BOOL supSaveDialogExecute(
@@ -3035,6 +3041,29 @@ BOOL supSaveDialogExecute(
     tag1.Flags = OFN_EXPLORER | OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT;
 
     return GetSaveFileName(&tag1);
+}
+
+/*
+* supGetStockIcon
+*
+* Purpose:
+*
+* Retrieve stock icon of given id.
+*
+*/
+HICON supGetStockIcon(
+    _In_ SHSTOCKICONID siid,
+    _In_ UINT uFlags)
+{
+    SHSTOCKICONINFO sii;
+
+    RtlSecureZeroMemory(&sii, sizeof(sii));
+    sii.cbSize = sizeof(sii);
+
+    if (SHGetStockIconInfo(siid, uFlags, &sii) == S_OK) {
+        return sii.hIcon;
+    }
+    return NULL;
 }
 
 /*
@@ -3214,7 +3243,7 @@ BOOL supxConvertFileName(
     WCHAR   szName[MAX_PATH + 1]; //for the device partition name
     WCHAR   szTemp[DBUFFER_SIZE]; //for the disk array
     UINT    uNameLen = 0;
-    WCHAR  *p = szTemp;
+    WCHAR* p = szTemp;
     SIZE_T  l = 0, k = 0;
 
     if ((NtFileName == NULL) || (DosFileName == NULL) || (ccDosFileName < 4))
@@ -3271,7 +3300,7 @@ BOOL supGetWin32FileName(
     OBJECT_ATTRIBUTES   obja;
     IO_STATUS_BLOCK     iost;
     ULONG               memIO;
-    BYTE               *Buffer = NULL;
+    BYTE* Buffer = NULL;
 
     if ((Win32FileName == NULL) || (ccWin32FileName < MAX_PATH)) {
         SetLastError(ERROR_INSUFFICIENT_BUFFER);
@@ -3352,7 +3381,7 @@ BOOLEAN supQuerySecureBootState(
     DWORD   dwState, dwSize, returnLength;
     LSTATUS lRet;
 
-    if (pbSecureBoot) 
+    if (pbSecureBoot)
         *pbSecureBoot = FALSE;
 
     //
@@ -3447,8 +3476,8 @@ BOOLEAN supQueryHVCIState(
         *pbHVCIEnabled = ((CodeIntegrity.CodeIntegrityOptions & CODEINTEGRITY_OPTION_ENABLED) &&
             ((CodeIntegrity.CodeIntegrityOptions & CODEINTEGRITY_OPTION_HVCI_KMCI_ENABLED)) ||
             (CodeIntegrity.CodeIntegrityOptions & CODEINTEGRITY_OPTION_HVCI_KMCI_AUDITMODE_ENABLED));
-        
-        *pbHVCIStrictMode = *pbHVCIEnabled && 
+
+        *pbHVCIStrictMode = *pbHVCIEnabled &&
             (CodeIntegrity.CodeIntegrityOptions & CODEINTEGRITY_OPTION_HVCI_KMCI_STRICTMODE_ENABLED);
 
         *pbHVCIIUMEnabled = (CodeIntegrity.CodeIntegrityOptions & CODEINTEGRITY_OPTION_HVCI_IUM_ENABLED) > 0;
@@ -3469,7 +3498,7 @@ BOOLEAN supQueryHVCIState(
 *
 */
 BOOLEAN supxGetWindowStationName(
-    _Out_ UNICODE_STRING *pusWinstaName
+    _Out_ UNICODE_STRING* pusWinstaName
 )
 {
     LPWSTR WindowStationsDir = L"\\Windows\\WindowStations";
@@ -3499,7 +3528,7 @@ BOOLEAN supxGetWindowStationName(
 *
 */
 HWINSTA supOpenWindowStationFromContext(
-    _In_ PROP_OBJECT_INFO *Context,
+    _In_ PROP_OBJECT_INFO* Context,
     _In_ BOOL fInherit,
     _In_ ACCESS_MASK dwDesiredAccess)
 {
@@ -3531,7 +3560,7 @@ HWINSTA supOpenWindowStationFromContext(
 *
 */
 HWINSTA supOpenWindowStationFromContextEx(
-    _In_ PROP_OBJECT_INFO *Context,
+    _In_ PROP_OBJECT_INFO* Context,
     _In_ BOOL fInherit,
     _In_ ACCESS_MASK dwDesiredAccess)
 {
@@ -3698,33 +3727,46 @@ BOOL supQueryObjectTrustLabel(
 *
 */
 PSID supQueryTokenUserSid(
-    _In_ HANDLE hProcessToken
+    _In_ HANDLE ProcessToken
 )
 {
-    PSID result = NULL;
+    PSID resultSid = NULL;
     PTOKEN_USER ptu;
     NTSTATUS status;
-    ULONG SidLength = 0, Length;
+    ULONG sidLength = 0, allocLength;
 
-    status = NtQueryInformationToken(hProcessToken, TokenUser,
-        NULL, 0, &SidLength);
+    status = NtQueryInformationToken(
+        ProcessToken,
+        TokenUser,
+        NULL, 0, &sidLength);
 
     if (status == STATUS_BUFFER_TOO_SMALL) {
 
-        ptu = (PTOKEN_USER)supHeapAlloc(SidLength);
+        ptu = (PTOKEN_USER)supHeapAlloc(sidLength);
 
         if (ptu) {
 
-            status = NtQueryInformationToken(hProcessToken, TokenUser,
-                ptu, SidLength, &SidLength);
+            status = NtQueryInformationToken(
+                ProcessToken,
+                TokenUser,
+                ptu,
+                sidLength,
+                &sidLength);
 
             if (NT_SUCCESS(status)) {
-                Length = SECURITY_MAX_SID_SIZE;
-                if (SidLength > Length)
-                    Length = SidLength;
-                result = supHeapAlloc(Length);
-                if (result) {
-                    status = RtlCopySid(Length, result, ptu->User.Sid);
+
+                allocLength = SECURITY_MAX_SID_SIZE;
+                if (sidLength > allocLength)
+                    allocLength = sidLength;
+
+                resultSid = (PSID)supHeapAlloc(allocLength);
+                if (resultSid) {
+
+                    status = RtlCopySid(
+                        allocLength,
+                        resultSid,
+                        ptu->User.Sid);
+
                 }
             }
 
@@ -3732,7 +3774,7 @@ PSID supQueryTokenUserSid(
         }
     }
 
-    return (NT_SUCCESS(status)) ? result : NULL;
+    return (NT_SUCCESS(status)) ? resultSid : NULL;
 }
 
 /*
@@ -3746,20 +3788,23 @@ PSID supQueryTokenUserSid(
 *
 */
 PSID supQueryProcessSid(
-    _In_ HANDLE hProcess
+    _In_ HANDLE ProcessHandle
 )
 {
-    HANDLE hProcessToken = NULL;
-    PSID result = NULL;
+    HANDLE processToken = NULL;
+    PSID resultSid = NULL;
 
-    if (NT_SUCCESS(NtOpenProcessToken(hProcess, TOKEN_QUERY, &hProcessToken))) {
+    if (NT_SUCCESS(NtOpenProcessToken(
+        ProcessHandle,
+        TOKEN_QUERY,
+        &processToken)))
+    {
+        resultSid = supQueryTokenUserSid(processToken);
 
-        result = supQueryTokenUserSid(hProcessToken);
-
-        NtClose(hProcessToken);
+        NtClose(processToken);
     }
 
-    return result;
+    return resultSid;
 }
 
 /*
@@ -3781,10 +3826,22 @@ NTSTATUS supIsLocalSystem(
     PSID                     SystemSid = NULL, TokenSid = NULL;
     SID_IDENTIFIER_AUTHORITY NtAuth = SECURITY_NT_AUTHORITY;
 
+    //
+    // Assume failure.
+    //
+    if (pbResult)
+        *pbResult = FALSE;
+
+    //
+    // Get current user SID.
+    //
     TokenSid = supQueryTokenUserSid(hToken);
     if (TokenSid == NULL)
         return status;
 
+    //
+    // Get System SID.
+    //
     status = RtlAllocateAndInitializeSid(
         &NtAuth,
         1,
@@ -3793,6 +3850,10 @@ NTSTATUS supIsLocalSystem(
         &SystemSid);
 
     if (NT_SUCCESS(status)) {
+
+        //
+        // Compare SIDs.
+        //
         bResult = RtlEqualSid(TokenSid, SystemSid);
         RtlFreeSid(SystemSid);
     }
@@ -3920,7 +3981,7 @@ BOOL supRunAsLocalSystem(
 
     SECURITY_QUALITY_OF_SERVICE sqos;
     OBJECT_ATTRIBUTES obja;
-    TOKEN_PRIVILEGES *TokenPrivileges;
+    TOKEN_PRIVILEGES* TokenPrivileges;
 
     WCHAR szApplication[MAX_PATH * 2];
 
@@ -4164,8 +4225,8 @@ PVOID supLookupImageSectionByName(
     BOOLEAN bFound = FALSE;
     ULONG i;
     PVOID Section;
-    IMAGE_NT_HEADERS *NtHeaders = RtlImageNtHeader(DllBase);
-    IMAGE_SECTION_HEADER *SectionTableEntry;
+    IMAGE_NT_HEADERS* NtHeaders = RtlImageNtHeader(DllBase);
+    IMAGE_SECTION_HEADER* SectionTableEntry;
 
     //
     // Assume failure.
@@ -4496,8 +4557,8 @@ INT supGetMaxCompareTwoFixedStrings(
 *
 */
 NTSTATUS supOpenTokenByParam(
-    _In_ CLIENT_ID *ClientId,
-    _In_ OBJECT_ATTRIBUTES *ObjectAttributes,
+    _In_ CLIENT_ID* ClientId,
+    _In_ OBJECT_ATTRIBUTES* ObjectAttributes,
     _In_ ACCESS_MASK TokenDesiredAccess,
     _In_ BOOL IsThreadToken,
     _Out_ PHANDLE TokenHandle)
@@ -4544,10 +4605,10 @@ NTSTATUS supOpenTokenByParam(
 *
 */
 HANDLE supOpenObjectFromContext(
-    _In_ PROP_OBJECT_INFO *Context,
-    _In_ OBJECT_ATTRIBUTES *ObjectAttributes,
+    _In_ PROP_OBJECT_INFO* Context,
+    _In_ OBJECT_ATTRIBUTES* ObjectAttributes,
     _In_ ACCESS_MASK DesiredAccess,
-    _Out_ NTSTATUS *Status
+    _Out_ NTSTATUS* Status
 )
 {
     HANDLE hObject = NULL, hPrivateNamespace = NULL;
@@ -4704,7 +4765,7 @@ HANDLE supOpenObjectFromContext(
 *
 */
 BOOL supCloseObjectFromContext(
-    _In_ PROP_OBJECT_INFO *Context,
+    _In_ PROP_OBJECT_INFO* Context,
     _In_ HANDLE hObject
 )
 {
@@ -4814,7 +4875,7 @@ VOID supCopyTreeListSubItemValue(
 {
     SIZE_T             cbText;
     LPWSTR             lpText;
-    TL_SUBITEMS_FIXED *subitems = NULL;
+    TL_SUBITEMS_FIXED* subitems = NULL;
     TVITEMEX           itemex;
     WCHAR              textbuf[MAX_PATH + 1];
 
@@ -4890,15 +4951,15 @@ PVOID supBSearch(
         )
 )
 {
-    const char *pivot;
+    const char* pivot;
     int result;
 
     while (num > 0) {
-        pivot = (char*)base + (num >> 1) * size;
+        pivot = (char*)base + (num >> 1)* size;
         result = cmp(key, pivot);
 
         if (result == 0)
-            return (void *)pivot;
+            return (void*)pivot;
 
         if (result > 0) {
             base = pivot + size;
@@ -5188,7 +5249,7 @@ NTSTATUS supOpenThread(
 */
 BOOL supPrintTimeConverted(
     _In_ PLARGE_INTEGER Time,
-    _In_ WCHAR *lpszBuffer,
+    _In_ WCHAR * lpszBuffer,
     _In_ SIZE_T cchBuffer
 )
 {
@@ -5234,7 +5295,7 @@ BOOL supPrintTimeConverted(
 BOOL supGetListViewItemParam(
     _In_ HWND hwndListView,
     _In_ INT itemIndex,
-    _Out_ PVOID *outParam
+    _Out_ PVOID * outParam
 )
 {
     LVITEM lvitem;
@@ -5310,7 +5371,7 @@ LPWSTR supIntegrityToString(
 */
 BOOL supLookupSidUserAndDomain(
     _In_ PSID Sid,
-    _Out_ LPWSTR *lpSidUserAndDomain
+    _Out_ LPWSTR * lpSidUserAndDomain
 )
 {
     BOOL bResult = FALSE;
@@ -5339,7 +5400,8 @@ BOOL supLookupSidUserAndDomain(
 
     lobja.SecurityQualityOfService = &SecurityQualityOfService;
 
-    if (NT_SUCCESS(LsaOpenPolicy(NULL,
+    if (NT_SUCCESS(LsaOpenPolicy(
+        NULL,
         (PLSA_OBJECT_ATTRIBUTES)&lobja,
         POLICY_LOOKUP_NAMES,
         (PLSA_HANDLE)&PolicyHandle)))
@@ -5577,7 +5639,7 @@ BOOL supHandlesQueryObjectAddress(
     _Out_ PULONG_PTR ObjectAddress
 )
 {
-    SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX *SearchResult, SearchEntry;
+    SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX* SearchResult, SearchEntry;
 
     SearchEntry.HandleValue = (ULONG_PTR)ObjectHandle;
 
@@ -5640,7 +5702,7 @@ HANDLE supPHLGetEntry(
 )
 {
     PLIST_ENTRY Next, Head = ListHead;
-    PHL_ENTRY *Item;
+    PHL_ENTRY* Item;
 
     if (!IsListEmpty(Head)) {
         Next = Head->Flink;
@@ -5668,7 +5730,7 @@ VOID supPHLFree(
 )
 {
     PLIST_ENTRY Next, Head = ListHead;
-    PHL_ENTRY *Item;
+    PHL_ENTRY* Item;
 
     if (!IsListEmpty(Head)) {
         Next = Head->Flink;
@@ -5701,7 +5763,7 @@ BOOL supPHLCreate(
 {
     ULONG NextEntryDelta = 0;
     ULONG numberOfThreads = 0, numberOfProcesses = 0;
-    PHL_ENTRY *PsListItem;
+    PHL_ENTRY* PsListItem;
     union {
         PSYSTEM_PROCESSES_INFORMATION ProcessEntry;
         PBYTE ListRef;
@@ -5755,13 +5817,13 @@ BOOL supPHLCreate(
 *
 */
 NTSTATUS supxEnumerateSLCacheValueDescriptors(
-    _In_ SL_KMEM_CACHE *Cache,
+    _In_ SL_KMEM_CACHE * Cache,
     _In_opt_ PENUMERATE_SL_CACHE_VALUE_DESCRIPTORS_CALLBACK Callback,
     _In_opt_ PVOID Context
 )
 {
     ULONG_PTR CurrentPosition, MaxPosition;
-    SL_KMEM_CACHE_VALUE_DESCRIPTOR *CacheDescriptor;
+    SL_KMEM_CACHE_VALUE_DESCRIPTOR* CacheDescriptor;
 
     __try {
 
@@ -5842,7 +5904,7 @@ PVOID supSLCacheRead(
     UNICODE_STRING ProductOptionsKey = RTL_CONSTANT_STRING(L"\\REGISTRY\\MACHINE\\System\\CurrentControlSet\\Control\\ProductOptions");
     OBJECT_ATTRIBUTES ObjectAttributes;
 
-    KEY_VALUE_PARTIAL_INFORMATION *PolicyData;
+    KEY_VALUE_PARTIAL_INFORMATION* PolicyData;
 
     __try {
 
@@ -5891,10 +5953,14 @@ BOOLEAN supSLCacheEnumerate(
     _In_opt_ PENUMERATE_SL_CACHE_VALUE_DESCRIPTORS_CALLBACK Callback,
     _In_opt_ PVOID Context)
 {
-    SL_KMEM_CACHE *Cache;
+    SL_KMEM_CACHE* Cache;
 
     Cache = (SL_KMEM_CACHE*)((KEY_VALUE_PARTIAL_INFORMATION*)(CacheData))->Data;
-    return NT_SUCCESS(supxEnumerateSLCacheValueDescriptors(Cache, Callback, Context));
+    
+    return NT_SUCCESS(supxEnumerateSLCacheValueDescriptors(
+        Cache, 
+        Callback, 
+        Context));
 }
 
 /*
@@ -5938,16 +6004,16 @@ HFONT supCreateFontIndirect(
 */
 HRESULT supxGetShellViewForDesktop(
     REFIID riid,
-    void **ppv
+    void** ppv
 )
 {
-    IShellWindows *psw;
+    IShellWindows* psw;
     HRESULT hr;
     HWND hwnd;
     IDispatch* pdisp;
-    IShellBrowser *psb;
+    IShellBrowser* psb;
     VARIANT vtEmpty;
-    IShellView *psv;
+    IShellView* psv;
 
     *ppv = NULL;
 
@@ -6023,12 +6089,12 @@ HRESULT supxGetShellViewForDesktop(
 * N.B. Taken entirely from Windows SDK sample.
 *
 */
-HRESULT supxGetShellDispatchFromView(IShellView *psv, REFIID riid, void **ppv)
+HRESULT supxGetShellDispatchFromView(IShellView * psv, REFIID riid, void** ppv)
 {
     HRESULT hr;
-    IDispatch *pdispBackground;
-    IShellFolderViewDual *psfvd;
-    IDispatch *pdisp;
+    IDispatch* pdispBackground;
+    IShellFolderViewDual* psfvd;
+    IDispatch* pdisp;
 
     *ppv = NULL;
 
@@ -6089,8 +6155,8 @@ HRESULT WINAPI supShellExecInExplorerProcess(
     _In_ PCWSTR pszFile)
 {
     HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
-    IShellView *psv;
-    IShellDispatch2 *psd;
+    IShellView* psv;
+    IShellDispatch2* psd;
     BSTR bstrFile;
     VARIANT vtEmpty;
 
@@ -6183,7 +6249,7 @@ NTSTATUS supPrivilegeEnabled(
 */
 BOOLEAN supLoadIconForObjectType(
     _In_ HWND hwndDlg,
-    _In_ PROP_OBJECT_INFO *Context,
+    _In_ PROP_OBJECT_INFO * Context,
     _In_ HIMAGELIST ImageList,
     _In_ BOOLEAN IsShadow)
 {
@@ -6206,7 +6272,7 @@ BOOLEAN supLoadIconForObjectType(
 
         if (IsShadow)
             Context->ObjectTypeIcon = hIcon;
-        else 
+        else
             Context->ObjectIcon = hIcon;
 
         return TRUE;
@@ -6224,7 +6290,7 @@ BOOLEAN supLoadIconForObjectType(
 *
 */
 VOID supDestroyIconForObjectType(
-    _In_ PROP_OBJECT_INFO *Context
+    _In_ PROP_OBJECT_INFO * Context
 )
 {
     if (Context->IsType) {

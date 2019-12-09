@@ -1049,7 +1049,7 @@ OBEX_FINDCALLBACK_ROUTINE(FindPopRegisteredPowerSettingCallbacks)
 */
 OBEX_FINDCALLBACK_ROUTINE(FindSeFileSystemNotifyRoutinesHead)
 {
-    BOOL Extended = (BOOL)QueryFlags;
+    BOOL Extended = (BOOL)(ULONG)QueryFlags;
     ULONG Index;
     LONG Rel = 0;
     ULONG_PTR Address = 0;
@@ -1225,7 +1225,7 @@ OBEX_FINDCALLBACK_ROUTINE(FindObjectTypeCallbackListHeadByType)
 */
 OBEX_FINDCALLBACK_ROUTINE(FindIopNotifyShutdownQueueHeadHead)
 {
-    BOOL bLastChance = (BOOL)QueryFlags;
+    BOOL bLastChance = (BOOL)(ULONG)QueryFlags;
     ULONG Index;
     LONG Rel = 0;
     ULONG_PTR Address = 0;

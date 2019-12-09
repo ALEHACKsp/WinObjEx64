@@ -6,7 +6,7 @@
 *
 *  VERSION:     1.83
 *
-*  DATE:        30 Nov 2019
+*  DATE:        08 Dec 2019
 *
 *  Common header file for the program support routines.
 *
@@ -129,8 +129,7 @@ extern POBJECT_TYPES_INFORMATION g_pObjectTypesInfo;
 
 #define PathFileExists(lpszPath) (GetFileAttributes(lpszPath) != (DWORD)-1)
 
-BOOL supInitNtdllCRT(
-    _In_ BOOL IsWine);
+BOOL supInitMSVCRT();
 
 #ifndef _DEBUG
 FORCEINLINE PVOID supHeapAlloc(
@@ -374,6 +373,10 @@ BOOL supSaveDialogExecute(
     _Inout_ LPWSTR SaveFileName,
     _In_ LPWSTR lpDialogFilter);
 
+HICON supGetStockIcon(
+    _In_ SHSTOCKICONID siid,
+    _In_ UINT uFlags);
+
 ULONG_PTR supWriteBufferToFile(
     _In_ PWSTR lpFileName,
     _In_ PVOID Buffer,
@@ -490,10 +493,10 @@ VOID supShowLastError(
     _In_ DWORD LastError);
 
 PSID supQueryTokenUserSid(
-    _In_ HANDLE hProcessToken);
+    _In_ HANDLE ProcessToken);
 
 PSID supQueryProcessSid(
-    _In_ HANDLE hProcess);
+    _In_ HANDLE ProcessHandle);
 
 VOID supCopyTreeListSubItemValue(
     _In_ HWND TreeList,
